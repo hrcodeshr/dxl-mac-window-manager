@@ -1,0 +1,19 @@
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Xcode / Swift
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
+.netrc
