@@ -94,9 +94,12 @@ final class DragSnapMonitor {
 
     private func beginDrag() {
         guard drag == nil else { return }
+        let point = NSEvent.mouseLocation
+        if SnapRuntime.shared.overlay.handlesInteractiveClick(at: point) {
+            return
+        }
         SnapRuntime.shared.hideOverlays()
         lastLoggedTarget = nil
-        let point = NSEvent.mouseLocation
         guard let window = WindowEngine.windowAtCocoaPoint(point), let frame = window.frame else {
             AppLog.info("drag begin missed window at \(Int(point.x)),\(Int(point.y))")
             SnapRuntime.shared.isDragging = false

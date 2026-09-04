@@ -62,6 +62,11 @@ final class OverlayController {
         pickerHUD.hide()
         highlightHUD.hide()
     }
+
+    func handlesInteractiveClick(at point: NSPoint) -> Bool {
+        pickerHUD.handlesInteractiveClick(at: point)
+            || highlightHUD.handlesInteractiveClick(at: point)
+    }
 }
 
 private final class HUDWindow: NSWindow {
@@ -116,6 +121,10 @@ private final class PickerHUD {
 
     var isVisible: Bool { window.isVisible }
 
+    func handlesInteractiveClick(at point: NSPoint) -> Bool {
+        window.isVisible && !window.ignoresMouseEvents && window.frame.contains(point)
+    }
+
     func hide() {
         window.orderOut(nil)
     }
@@ -128,6 +137,8 @@ private final class PickerHUDView: NSView {
     var onCancel: (() -> Void)?
 
     override var isFlipped: Bool { true }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
         NSColor(calibratedWhite: 0.08, alpha: 1).setFill()
@@ -242,6 +253,10 @@ private final class HighlightHUD {
         fillView.rebuild()
         window.orderOut(nil)
     }
+
+    func handlesInteractiveClick(at point: NSPoint) -> Bool {
+        window.isVisible && !window.ignoresMouseEvents && window.frame.contains(point)
+    }
 }
 
 private final class HighlightView: NSView {
@@ -251,6 +266,8 @@ private final class HighlightView: NSView {
     private var buttons: [AssistButton] = []
 
     override var isFlipped: Bool { true }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 12, yRadius: 12)
@@ -310,6 +327,8 @@ private final class AssistButton: NSControl {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
         onSelect?()
