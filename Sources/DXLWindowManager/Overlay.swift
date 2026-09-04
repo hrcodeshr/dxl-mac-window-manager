@@ -271,11 +271,29 @@ private final class HighlightView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 12, yRadius: 12)
-        NSColor.systemBlue.withAlphaComponent(0.28).setFill()
+        if candidates.isEmpty {
+            NSColor.systemBlue.withAlphaComponent(0.28).setFill()
+        } else {
+            NSColor(calibratedWhite: 0.045, alpha: 0.96).setFill()
+        }
         NSColor.systemBlue.withAlphaComponent(0.9).setStroke()
         path.lineWidth = 3
         path.fill()
         path.stroke()
+
+        guard !candidates.isEmpty else { return }
+        let heading = NSAttributedString(
+            string: WindowEngine.hasScreenCaptureAccess
+                ? "Choose a window"
+                : "Choose a window · enable Screen Recording for previews",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 15, weight: .semibold),
+                .foregroundColor: NSColor.white,
+            ]
+        )
+        heading.draw(
+            in: NSRect(x: 18, y: 15, width: max(0, bounds.width - 36), height: 22)
+        )
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -289,22 +307,28 @@ private final class HighlightView: NSView {
         buttons.removeAll()
         guard !candidates.isEmpty else { return }
 
-        let columns = min(3, max(1, candidates.count))
+        let columns = min(bounds.width >= 520 ? 3 : 2, max(1, candidates.count))
         let rows = Int(ceil(Double(candidates.count) / Double(columns)))
-        let padding: CGFloat = 20
-        let gap: CGFloat = 10
-        let cellWidth = (bounds.width - padding * 2 - gap * CGFloat(columns - 1)) / CGFloat(columns)
-        let cellHeight = min(72, (bounds.height - padding * 2 - gap * CGFloat(rows - 1)) / CGFloat(rows))
+        let horizontalPadding: CGFloat = 16
+        let topPadding: CGFloat = 48
+        let bottomPadding: CGFloat = 16
+        let gap: CGFloat = 12
+        let cellWidth =
+            (bounds.width - horizontalPadding * 2 - gap * CGFloat(columns - 1))
+            / CGFloat(columns)
+        let cellHeight =
+            (bounds.height - topPadding - bottomPadding - gap * CGFloat(rows - 1))
+            / CGFloat(rows)
 
         for (index, candidate) in candidates.enumerated() {
             let col = index % columns
             let row = index / columns
             let button = AssistButton(candidate: candidate)
             button.frame = NSRect(
-                x: padding + CGFloat(col) * (cellWidth + gap),
-                y: padding + CGFloat(row) * (cellHeight + gap),
+                x: horizontalPadding + CGFloat(col) * (cellWidth + gap),
+                y: topPadding + CGFloat(row) * (cellHeight + gap),
                 width: cellWidth,
-                height: cellHeight
+                height: max(52, cellHeight)
             )
             button.onSelect = { [weak self] in
                 self?.onSelect?(candidate)
@@ -318,6 +342,8 @@ private final class HighlightView: NSView {
 private final class AssistButton: NSControl {
     let candidate: SnapCandidate
     var onSelect: (() -> Void)?
+    private var trackingArea: NSTrackingArea?
+    private var hovered = false
 
     init(candidate: SnapCandidate) {
         self.candidate = candidate
@@ -330,24 +356,112 @@ private final class AssistButton: NSControl {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea {
+            removeTrackingArea(trackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        hovered = true
+        needsDisplay = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hovered = false
+        needsDisplay = true
+    }
+
     override func mouseDown(with event: NSEvent) {
         onSelect?()
     }
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 10, yRadius: 10)
-        NSColor.white.withAlphaComponent(0.16).setFill()
+        NSColor(calibratedWhite: hovered ? 0.22 : 0.12, alpha: 1).setFill()
+        NSColor.systemBlue.withAlphaComponent(hovered ? 1 : 0.55).setStroke()
+        path.lineWidth = hovered ? 3 : 1
         path.fill()
+        path.stroke()
 
-        let iconRect = NSRect(x: 12, y: (bounds.height - 28) / 2, width: 28, height: 28)
+        let titleHeight: CGFloat = 34
+        let previewRect = NSRect(
+            x: 8,
+            y: 8,
+            width: max(0, bounds.width - 16),
+            height: max(0, bounds.height - titleHeight - 12)
+        )
+        NSColor.black.withAlphaComponent(0.5).setFill()
+        NSBezierPath(roundedRect: previewRect, xRadius: 6, yRadius: 6).fill()
+
+        if let thumbnail = candidate.thumbnail {
+            thumbnail.draw(
+                in: aspectFit(size: thumbnail.size, inside: previewRect.insetBy(dx: 4, dy: 4)),
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1,
+                respectFlipped: true,
+                hints: [.interpolation: NSImageInterpolation.high]
+            )
+        } else if let icon = candidate.icon {
+            let side = min(64, max(24, previewRect.height - 12))
+            icon.draw(
+                in: NSRect(
+                    x: previewRect.midX - side / 2,
+                    y: previewRect.midY - side / 2,
+                    width: side,
+                    height: side
+                )
+            )
+        }
+
+        let iconRect = NSRect(
+            x: 9,
+            y: bounds.height - titleHeight + 5,
+            width: 20,
+            height: 20
+        )
         candidate.icon?.draw(in: iconRect)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.lineBreakMode = .byTruncatingMiddle
         let title = NSAttributedString(
             string: candidate.title,
             attributes: [
                 .font: NSFont.systemFont(ofSize: 12, weight: .medium),
                 .foregroundColor: NSColor.white,
+                .paragraphStyle: paragraph,
             ]
         )
-        title.draw(in: NSRect(x: 48, y: 0, width: max(0, bounds.width - 56), height: bounds.height))
+        title.draw(
+            in: NSRect(
+                x: 35,
+                y: bounds.height - titleHeight + 7,
+                width: max(0, bounds.width - 44),
+                height: 20
+            )
+        )
+    }
+
+    private func aspectFit(size: NSSize, inside rect: NSRect) -> NSRect {
+        guard size.width > 0, size.height > 0, rect.width > 0, rect.height > 0 else {
+            return rect
+        }
+        let scale = min(rect.width / size.width, rect.height / size.height)
+        let fitted = NSSize(width: size.width * scale, height: size.height * scale)
+        return NSRect(
+            x: rect.midX - fitted.width / 2,
+            y: rect.midY - fitted.height / 2,
+            width: fitted.width,
+            height: fitted.height
+        )
     }
 }

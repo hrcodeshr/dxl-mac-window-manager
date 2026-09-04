@@ -61,6 +61,16 @@ final class MenuBarController {
         assist.state = Settings.snapAssistEnabled ? .on : .off
         menu.addItem(assist)
 
+        let previewsGranted = WindowEngine.hasScreenCaptureAccess
+        let previews = NSMenuItem(
+            title: previewsGranted ? "Window previews: enabled" : "Enable window previews…",
+            action: previewsGranted ? nil : #selector(requestPreviewAccess),
+            keyEquivalent: ""
+        )
+        previews.target = self
+        previews.state = previewsGranted ? .on : .off
+        menu.addItem(previews)
+
         let green = NSMenuItem(
             title: "Layout picker on green button",
             action: #selector(toggleGreen),
@@ -137,6 +147,11 @@ final class MenuBarController {
 
     @objc private func toggleAssist() {
         Settings.snapAssistEnabled.toggle()
+        rebuildMenu()
+    }
+
+    @objc private func requestPreviewAccess() {
+        _ = WindowEngine.requestScreenCaptureAccess()
         rebuildMenu()
     }
 

@@ -9,7 +9,7 @@ Drag a window to a screen edge or corner to tile it. Drag to the top of the scre
 Swift is the most efficient implementation for this on Mac:
 
 - The OS APIs that move other apps' windows (`AXUIElement`, Accessibility) are native Cocoa APIs. Swift talks to them directly, with no bridge.
-- The snap overlay is an `NSPanel` drawn in AppKit. Same process, no Electron/JS hop.
+- The snap overlay is a floating AppKit HUD. Same process, no Electron/JS hop.
 - Production Mac window managers (Rectangle, AeroSpace, Loop) are Swift for the same reason.
 - C/Obj-C is not faster here. The cost is Accessibility IPC and window-server round trips, not language overhead.
 - Rust, Python, or Electron would wrap those same APIs with more code and worse overlay latency.
@@ -41,11 +41,13 @@ Or open `Package.swift` in Xcode and run the `DXLWindowManager` target.
 
 ## First launch
 
-1. A window titled **DXL Window Manager is running** should appear.
-2. Click **Request Accessibility Access…** and enable the app in System Settings → Privacy & Security → Accessibility.
+1. A setup window appears when Accessibility access is missing.
+2. Enable the app in System Settings → Privacy & Security → Accessibility.
 3. Drag a window to the left or right edge, a corner, or the top of the screen.
 
 The app also puts a split-rectangle icon in the menu bar.
+
+For live previews in Snap Assist, choose **Enable window previews…** from the menu-bar icon and grant Screen Recording access. Without it, Snap Assist displays larger app-icon cards instead.
 
 If macOS Sequoia's built-in tiling also fires, turn off **Tile by dragging windows to screen edges** in System Settings → Desktop & Dock so only this app handles snap.
 
@@ -82,4 +84,5 @@ Pushes to `main` run tests and package the `.app` on GitHub-hosted macOS. Downlo
 
 - macOS 13 Ventura or later
 - Accessibility permission
+- Screen Recording permission for live window previews
 - Not sandboxed (it has to resize other apps' windows)

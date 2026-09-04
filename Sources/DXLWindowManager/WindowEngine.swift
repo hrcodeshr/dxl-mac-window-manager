@@ -113,6 +113,23 @@ struct AXWindow {
 }
 
 enum WindowEngine {
+    static var hasScreenCaptureAccess: Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
+    @discardableResult
+    static func requestScreenCaptureAccess() -> Bool {
+        let granted = CGRequestScreenCaptureAccess()
+        AppLog.info("screen recording permission granted=\(granted)")
+        if !granted,
+           let url = URL(
+               string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+           ) {
+            NSWorkspace.shared.open(url)
+        }
+        return granted
+    }
+
     static func windowAtCocoaPoint(_ point: NSPoint) -> AXWindow? {
         let quartzPoint = CGPoint(x: point.x, y: CoordinateSpace.primaryHeight - point.y)
         guard let info = windowInfo(at: quartzPoint) else {
@@ -139,6 +156,7 @@ enum WindowEngine {
         let ourPID = ProcessInfo.processInfo.processIdentifier
         var seen = Set<Int>()
         var candidates: [SnapCandidate] = []
+        let canCapture = hasScreenCaptureAccess
 
         for entry in list {
             guard
@@ -161,19 +179,45 @@ enum WindowEngine {
                 seen.insert(windowNumber)
             }
 
-            let name = entry[kCGWindowOwnerName as String] as? String ?? "Window"
+            let appName = entry[kCGWindowOwnerName as String] as? String ?? "Window"
+            let windowName = (entry[kCGWindowName as String] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let title = windowName.flatMap { $0.isEmpty ? nil : $0 } ?? appName
             let app = NSRunningApplication(processIdentifier: windowPID)
             candidates.append(
                 SnapCandidate(
                     pid: windowPID,
-                    title: name,
+                    windowID: CGWindowID(windowNumber),
+                    appName: appName,
+                    title: title,
                     icon: app?.icon,
+                    thumbnail: canCapture ? thumbnail(for: CGWindowID(windowNumber)) : nil,
                     bounds: Rect(x: Double(x), y: Double(y), width: Double(w), height: Double(h))
                 )
             )
+            if candidates.count == 9 {
+                break
+            }
         }
 
         return candidates
+    }
+
+    private static func thumbnail(for windowID: CGWindowID) -> NSImage? {
+        guard windowID != kCGNullWindowID,
+              let image = CGWindowListCreateImage(
+                  .null,
+                  .optionIncludingWindow,
+                  windowID,
+                  [.boundsIgnoreFraming, .nominalResolution]
+              )
+        else {
+            return nil
+        }
+        return NSImage(
+            cgImage: image,
+            size: NSSize(width: image.width, height: image.height)
+        )
     }
 
     static func window(forPID pid: pid_t, matching bounds: Rect? = nil) -> AXWindow? {
@@ -303,7 +347,10 @@ enum WindowEngine {
 
 struct SnapCandidate {
     var pid: pid_t
+    var windowID: CGWindowID
+    var appName: String
     var title: String
     var icon: NSImage?
+    var thumbnail: NSImage?
     var bounds: Rect
 }
