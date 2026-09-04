@@ -28,16 +28,24 @@ make package
 open "dist/DXL Window Manager.app"
 ```
 
+A status window and a Dock icon should appear. If `open` still looks like a no-op, run the binary in the terminal so errors print:
+
+```bash
+swift run DXLWindowManager
+# or
+"./dist/DXL Window Manager.app/Contents/MacOS/DXLWindowManager"
+cat ~/Library/Logs/dxl-window-manager.log
+```
+
 Or open `Package.swift` in Xcode and run the `DXLWindowManager` target.
 
 ## First launch
 
-1. Click the menu bar icon (split rectangle).
-2. Choose **Request Accessibility Access…**
-3. Enable **DXL Window Manager** in System Settings → Privacy & Security → Accessibility.
-4. Drag a window to the left or right edge, a corner, or the top of the screen.
+1. A window titled **DXL Window Manager is running** should appear.
+2. Click **Request Accessibility Access…** and enable the app in System Settings → Privacy & Security → Accessibility.
+3. Drag a window to the left or right edge, a corner, or the top of the screen.
 
-The app has no Dock icon. It lives in the menu bar.
+The app also puts a split-rectangle icon in the menu bar.
 
 If macOS Sequoia's built-in tiling also fires, turn off **Tile by dragging windows to screen edges** in System Settings → Desktop & Dock so only this app handles snap.
 

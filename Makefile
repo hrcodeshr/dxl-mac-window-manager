@@ -1,4 +1,4 @@
-.PHONY: build test package
+.PHONY: build test package run
 
 build:
 	swift build
@@ -8,3 +8,6 @@ test:
 
 package:
 	bash scripts/package-app.sh
+
+run:
+	swift run DXLWindowManager

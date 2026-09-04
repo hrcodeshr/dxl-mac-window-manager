@@ -3,10 +3,11 @@ import AppKit
 @main
 enum DXLMain {
     static func main() {
+        AppLog.infoSync("main entered")
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate
-        app.setActivationPolicy(.accessory)
+        app.setActivationPolicy(.regular)
         withExtendedLifetime(delegate) {
             app.run()
         }
@@ -18,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var dragMonitor: DragSnapMonitor?
     private var hotkeys: HotkeyMonitor?
     private var accessTimer: Timer?
+    private var statusWindow: StatusWindowController?
     private var servicesRunning = false
     private var lastTrusted: Bool?
 
@@ -26,6 +28,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menuBar = MenuBarController(appDelegate: self)
         dragMonitor = DragSnapMonitor()
         hotkeys = HotkeyMonitor()
+        statusWindow = StatusWindowController()
+        statusWindow?.show()
         refreshAccess()
 
         accessTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -53,6 +57,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             lastTrusted = granted
             menuBar?.rebuildMenu()
         }
+    }
+
+    func showStatusWindow() {
+        statusWindow?.show()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

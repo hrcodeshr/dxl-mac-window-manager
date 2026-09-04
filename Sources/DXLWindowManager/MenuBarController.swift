@@ -70,6 +70,14 @@ final class MenuBarController {
 
         menu.addItem(.separator())
 
+        let showStatusItem = NSMenuItem(
+            title: "Show Status Window",
+            action: #selector(showStatus),
+            keyEquivalent: ""
+        )
+        showStatusItem.target = self
+        menu.addItem(showStatusItem)
+
         let openLog = NSMenuItem(
             title: "Open Log",
             action: #selector(openLogFile),
@@ -123,6 +131,10 @@ final class MenuBarController {
             AppLog.error("login item failed: \(error.localizedDescription)")
         }
         rebuildMenu()
+    }
+
+    @objc private func showStatus() {
+        appDelegate?.showStatusWindow()
     }
 
     @objc private func openLogFile() {

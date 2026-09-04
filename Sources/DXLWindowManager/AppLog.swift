@@ -16,6 +16,10 @@ enum AppLog {
         write(level: "INFO", message: message)
     }
 
+    static func infoSync(_ message: String) {
+        write(level: "INFO", message: message, sync: true)
+    }
+
     static func error(_ message: String) {
         write(level: "ERROR", message: message)
     }
@@ -28,11 +32,11 @@ enum AppLog {
         NSWorkspace.shared.activateFileViewerSelecting([fileURL])
     }
 
-    private static func write(level: String, message: String) {
+    private static func write(level: String, message: String, sync: Bool = false) {
         let timestamp = iso8601.string(from: Date())
         let line = "\(timestamp) [\(level)] \(message)\n"
         NSLog("%@", "DXL \(level): \(message)")
-        queue.async {
+        let work = {
             let url = fileURL
             if !FileManager.default.fileExists(atPath: url.path) {
                 FileManager.default.createFile(atPath: url.path, contents: nil)
@@ -43,6 +47,11 @@ enum AppLog {
             if let data = line.data(using: .utf8) {
                 handle.write(data)
             }
+        }
+        if sync {
+            queue.sync(execute: work)
+        } else {
+            queue.async(execute: work)
         }
     }
 
