@@ -9,12 +9,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 1
 fi
 
-if swift build -c release --static-swift-stdlib; then
-  echo "Linked with the static Swift standard library."
-else
-  echo "Static Swift stdlib unavailable; embedding runtime libraries instead."
-  swift build -c release
-fi
+swift build -c release
 
 BIN="$(swift build -c release --show-bin-path)/DXLWindowManager"
 APP="$ROOT/dist/DXL Window Manager.app"

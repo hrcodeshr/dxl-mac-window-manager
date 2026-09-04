@@ -1,4 +1,5 @@
 import AppKit
+import DXLSnapCore
 
 @main
 enum DXLMain {
