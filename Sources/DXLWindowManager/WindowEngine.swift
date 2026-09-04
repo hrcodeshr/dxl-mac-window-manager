@@ -77,6 +77,30 @@ struct AXWindow {
         return first == .success || second == .success
     }
 
+    func bringToFront() {
+        let appElement = AXUIElementCreateApplication(pid)
+        AXUIElementSetAttributeValue(
+            appElement,
+            kAXFocusedWindowAttribute as CFString,
+            element
+        )
+        AXUIElementPerformAction(element, kAXRaiseAction as CFString)
+        NSRunningApplication(processIdentifier: pid)?.activate(options: [.activateIgnoringOtherApps])
+
+        // Activation can raise the app's previously focused window, so assert the
+        // selected window again after AppKit finishes bringing the app forward.
+        let selectedElement = element
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            let selectedApp = AXUIElementCreateApplication(self.pid)
+            AXUIElementSetAttributeValue(
+                selectedApp,
+                kAXFocusedWindowAttribute as CFString,
+                selectedElement
+            )
+            AXUIElementPerformAction(selectedElement, kAXRaiseAction as CFString)
+        }
+    }
+
     private func copy(_ attribute: String) -> AnyObject? {
         var value: AnyObject?
         let result = AXUIElementCopyAttributeValue(element, attribute as CFString, &value)

@@ -60,7 +60,9 @@ final class SnapRuntime {
         let visible = CoordinateSpace.visibleTopLeftRect(for: assist.screen)
         let context = ScreenSnapContext(screen: assist.screen, cocoaCursor: NSEvent.mouseLocation)
         let frame = assist.layout.zones[next].frame(in: visible, gap: Settings.gap)
-        _ = SnapApply.snap(window, to: frame, reason: "assist \(assist.layout.id)[\(next)]")
+        if SnapApply.snap(window, to: frame, reason: "assist \(assist.layout.id)[\(next)]") {
+            window.bringToFront()
+        }
 
         var filled = assist.filled
         filled.insert(next)
