@@ -88,7 +88,7 @@ enum WindowEngine {
         return make(element: window as! AXUIElement, pid: app.processIdentifier)
     }
 
-    static func candidateWindows(excluding pid: pid_t?) -> [SnapCandidate] {
+    static func candidateWindows(excluding excludedPID: pid_t?) -> [SnapCandidate] {
         let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
         guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
             return []
@@ -100,9 +100,9 @@ enum WindowEngine {
 
         for entry in list {
             guard
-                let windowPID = pid(from: entry[kCGWindowOwnerPID as String]),
+                let windowPID = ownerPID(from: entry[kCGWindowOwnerPID as String]),
                 windowPID != ourPID,
-                windowPID != pid,
+                windowPID != excludedPID,
                 let layer = number(entry[kCGWindowLayer as String])?.intValue,
                 layer == 0,
                 let boundsDict = entry[kCGWindowBounds as String] as? [String: Any],
@@ -143,7 +143,7 @@ enum WindowEngine {
         return windows.first.map { make(element: $0, pid: pid) }
     }
 
-    private static func pid(from value: Any?) -> pid_t? {
+    private static func ownerPID(from value: Any?) -> pid_t? {
         if let number = value as? NSNumber {
             return Int32(truncating: number)
         }
@@ -175,8 +175,8 @@ enum WindowEngine {
 
         for entry in list {
             guard
-                let pid = pid(from: entry[kCGWindowOwnerPID as String]),
-                pid != ourPID,
+                let owner = ownerPID(from: entry[kCGWindowOwnerPID as String]),
+                owner != ourPID,
                 let layer = number(entry[kCGWindowLayer as String])?.intValue,
                 layer == 0,
                 let boundsDict = entry[kCGWindowBounds as String] as? [String: Any],
@@ -189,7 +189,7 @@ enum WindowEngine {
             let bounds = CGRect(x: x, y: y, width: w, height: h)
             if bounds.contains(quartzPoint) {
                 return WindowInfo(
-                    pid: pid,
+                    pid: owner,
                     bounds: Rect(x: Double(x), y: Double(y), width: Double(w), height: Double(h))
                 )
             }
