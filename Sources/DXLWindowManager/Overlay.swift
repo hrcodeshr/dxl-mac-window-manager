@@ -1,42 +1,6 @@
 import AppKit
 import DXLSnapCore
 
-final class OverlayWindow: NSPanel {
-    private let overlayView: OverlayView
-
-    init(screen: NSScreen) {
-        overlayView = OverlayView()
-        super.init(
-            contentRect: screen.frame,
-            styleMask: [.borderless, .nonactivatingPanel],
-            backing: .buffered,
-            defer: false
-        )
-        setFrame(screen.frame, display: false)
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = false
-        ignoresMouseEvents = true
-        level = .screenSaver
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-        hidesOnDeactivate = false
-        contentView = overlayView
-    }
-
-    func show(state: OverlayState) {
-        ignoresMouseEvents = state.assistCandidates.isEmpty && !state.clickable
-        acceptsMouseMovedEvents = state.clickable
-        overlayView.apply(state)
-        orderFrontRegardless()
-    }
-
-    func hide() {
-        overlayView.apply(OverlayState())
-        ignoresMouseEvents = true
-        orderOut(nil)
-    }
-}
-
 struct OverlayState {
     var highlightedZone: Rect?
     var picker: LayoutPickerGeometry?
@@ -46,142 +10,126 @@ struct OverlayState {
     var clickable = false
 }
 
-final class OverlayView: NSView {
-    var state = OverlayState()
-    var onAssistSelect: ((SnapCandidate) -> Void)?
-    var onAssistCancel: (() -> Void)?
-    var onPickerSelect: ((PickerHit) -> Void)?
-    var onPickerCancel: (() -> Void)?
-    private var assistButtons: [AssistButton] = []
+final class OverlayController {
+    private let pickerHUD = PickerHUD()
+    private let highlightHUD = HighlightHUD()
+
+    func showHighlight(on screen: NSScreen, zone: Rect) {
+        pickerHUD.hide()
+        highlightHUD.show(zone: zone, candidates: [], onSelect: nil, onCancel: nil)
+    }
+
+    func showPicker(
+        on screen: NSScreen,
+        picker: LayoutPickerGeometry,
+        hit: PickerHit?,
+        zone: Rect?,
+        clickable: Bool = false,
+        onSelect: ((PickerHit) -> Void)? = nil,
+        onCancel: (() -> Void)? = nil
+    ) {
+        if let zone {
+            highlightHUD.show(zone: zone, candidates: [], onSelect: nil, onCancel: nil)
+        } else {
+            highlightHUD.hide()
+        }
+        pickerHUD.show(picker: picker, hit: hit, clickable: clickable, onSelect: onSelect, onCancel: onCancel)
+        AppLog.info("picker HUD shown clickable=\(clickable) hit=\(hit?.layoutID ?? "none")")
+    }
+
+    func showAssist(
+        on screen: NSScreen,
+        zone: Rect,
+        candidates: [SnapCandidate],
+        onSelect: @escaping (SnapCandidate) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        pickerHUD.hide()
+        highlightHUD.show(zone: zone, candidates: candidates, onSelect: onSelect, onCancel: onCancel)
+    }
+
+    func hide() {
+        pickerHUD.hide()
+        highlightHUD.hide()
+    }
+}
+
+private final class PickerHUD: NSPanel {
+    private let pickerView = PickerHUDView()
+
+    init() {
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 140),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        isOpaque = true
+        backgroundColor = NSColor.black.withAlphaComponent(0.92)
+        hasShadow = true
+        level = .statusBar
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        hidesOnDeactivate = false
+        title = "DXL Snap Layouts"
+        contentView = pickerView
+    }
+
+    func show(
+        picker: LayoutPickerGeometry,
+        hit: PickerHit?,
+        clickable: Bool,
+        onSelect: ((PickerHit) -> Void)?,
+        onCancel: (() -> Void)?
+    ) {
+        let frame = CoordinateSpace.topLeftRectToCocoa(picker.bar)
+        setFrame(frame, display: true)
+        ignoresMouseEvents = !clickable
+        acceptsMouseMovedEvents = clickable
+        pickerView.geometry = picker
+        pickerView.hit = hit
+        pickerView.onSelect = onSelect
+        pickerView.onCancel = onCancel
+        pickerView.needsDisplay = true
+        orderFrontRegardless()
+    }
+
+    func hide() {
+        orderOut(nil)
+    }
+}
+
+private final class PickerHUDView: NSView {
+    var geometry: LayoutPickerGeometry?
+    var hit: PickerHit?
+    var onSelect: ((PickerHit) -> Void)?
+    var onCancel: (() -> Void)?
 
     override var isFlipped: Bool { true }
 
-    func apply(_ state: OverlayState) {
-        self.state = state
-        needsDisplay = true
-        rebuildAssistButtons()
-    }
-
     override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-        guard window?.screen != nil else { return }
-        let origin = CoordinateSpace.cocoaRectToTopLeft(window?.screen?.frame ?? .zero)
-
-        func local(_ rect: Rect) -> NSRect {
-            NSRect(
-                x: rect.x - origin.x,
-                y: rect.y - origin.y,
-                width: rect.width,
-                height: rect.height
-            )
-        }
-
-        if let zone = state.highlightedZone {
-            drawZone(local(zone), highlighted: true)
-        }
-
-        if let picker = state.picker {
-            NSColor.black.withAlphaComponent(0.18).setFill()
-            bounds.fill()
-            drawPicker(picker, origin: origin)
-        }
-
-        if let assist = state.assistZone {
-            let rect = local(assist)
-            NSColor.black.withAlphaComponent(0.28).setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10).fill()
-        }
-    }
-
-    override var acceptsFirstResponder: Bool { !state.assistCandidates.isEmpty }
-
-    override func mouseDown(with event: NSEvent) {
-        if state.clickable, let picker = state.picker {
-            let cursor = cursorInTopLeft(from: event)
-            if let hit = picker.hitTest(cursor) {
-                onPickerSelect?(hit)
-                return
-            }
-            onPickerCancel?()
-            return
-        }
-        guard !state.assistCandidates.isEmpty else { return }
-        onAssistCancel?()
-    }
-
-    override func mouseMoved(with event: NSEvent) {
-        guard state.clickable, let picker = state.picker else { return }
-        let hit = picker.hitTest(cursorInTopLeft(from: event))
-        if hit != state.pickerHit {
-            var next = state
-            next.pickerHit = hit
-            if let hit, let layout = LayoutCatalog.layout(id: hit.layoutID), let screen = window?.screen {
-                let visible = CoordinateSpace.visibleTopLeftRect(for: screen)
-                next.highlightedZone = layout.zones[hit.zoneIndex].frame(in: visible, gap: Settings.gap)
-            }
-            apply(next)
-        }
-    }
-
-    private func cursorInTopLeft(from event: NSEvent) -> Point {
-        let cocoa = window?.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin ?? NSEvent.mouseLocation
-        return CoordinateSpace.cocoaPointToTopLeft(cocoa)
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 {
-            onAssistCancel?()
-            return
-        }
-        super.keyDown(with: event)
-    }
-
-    private func drawZone(_ rect: NSRect, highlighted: Bool) {
-        let path = NSBezierPath(roundedRect: rect.insetBy(dx: 6, dy: 6), xRadius: 12, yRadius: 12)
-        if highlighted {
-            NSColor.systemBlue.withAlphaComponent(0.28).setFill()
-            NSColor.systemBlue.withAlphaComponent(0.9).setStroke()
-        } else {
-            NSColor.white.withAlphaComponent(0.12).setFill()
-            NSColor.white.withAlphaComponent(0.4).setStroke()
-        }
-        path.lineWidth = 2
-        path.fill()
-        path.stroke()
-    }
-
-    private func drawPicker(_ picker: LayoutPickerGeometry, origin: Rect) {
-        let bar = NSRect(
-            x: picker.bar.x - origin.x,
-            y: picker.bar.y - origin.y,
-            width: picker.bar.width,
-            height: picker.bar.height
-        )
-        let barPath = NSBezierPath(roundedRect: bar, xRadius: 16, yRadius: 16)
-        NSColor.black.withAlphaComponent(0.82).setFill()
-        barPath.fill()
-        NSColor.white.withAlphaComponent(0.2).setStroke()
-        barPath.lineWidth = 1
-        barPath.stroke()
+        NSColor.black.withAlphaComponent(0.92).setFill()
+        bounds.fill()
 
         let caption = NSAttributedString(
-            string: "Drop on a layout",
+            string: "DXL layouts — drop or click a pane",
             attributes: [
-                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-                .foregroundColor: NSColor.white.withAlphaComponent(0.7),
+                .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+                .foregroundColor: NSColor.white,
             ]
         )
-        caption.draw(at: NSPoint(x: bar.minX + 20, y: bar.minY + 6))
+        caption.draw(at: NSPoint(x: 16, y: 6))
 
-        for item in picker.items {
+        guard let geometry else { return }
+        let origin = geometry.bar
+        for item in geometry.items {
             let frame = NSRect(
                 x: item.frame.x - origin.x,
                 y: item.frame.y - origin.y,
                 width: item.frame.width,
                 height: item.frame.height
             )
-            let selectedLayout = state.pickerHit?.layoutID == item.layout.id
-            NSColor.white.withAlphaComponent(selectedLayout ? 0.16 : 0.08).setFill()
+            let selected = hit?.layoutID == item.layout.id
+            NSColor.white.withAlphaComponent(selected ? 0.2 : 0.1).setFill()
             NSBezierPath(roundedRect: frame, xRadius: 8, yRadius: 8).fill()
 
             for (index, zone) in item.zoneFrames.enumerated() {
@@ -191,60 +139,122 @@ final class OverlayView: NSView {
                     width: zone.width,
                     height: zone.height
                 )
-                let hit = state.pickerHit?.layoutID == item.layout.id && state.pickerHit?.zoneIndex == index
-                let path = NSBezierPath(roundedRect: zoneRect, xRadius: 3, yRadius: 3)
-                if hit {
-                    NSColor.systemBlue.withAlphaComponent(0.85).setFill()
-                } else {
-                    NSColor.white.withAlphaComponent(0.35).setFill()
-                }
-                path.fill()
+                let isHit = hit?.layoutID == item.layout.id && hit?.zoneIndex == index
+                NSColor.systemBlue.withAlphaComponent(isHit ? 0.95 : 0.45).setFill()
+                NSBezierPath(roundedRect: zoneRect, xRadius: 3, yRadius: 3).fill()
             }
         }
     }
 
-    private func rebuildAssistButtons() {
-        assistButtons.forEach { $0.removeFromSuperview() }
-        assistButtons.removeAll()
-        window?.ignoresMouseEvents = state.assistCandidates.isEmpty && !state.clickable
-
-        guard
-            let assist = state.assistZone,
-            !state.assistCandidates.isEmpty,
-            let screenFrame = window?.screen?.frame
-        else { return }
-
-        let origin = CoordinateSpace.cocoaRectToTopLeft(screenFrame)
-        let local = NSRect(
-            x: assist.x - origin.x,
-            y: assist.y - origin.y,
-            width: assist.width,
-            height: assist.height
+    override func mouseDown(with event: NSEvent) {
+        guard let geometry else {
+            onCancel?()
+            return
+        }
+        let cursor = CoordinateSpace.cocoaPointToTopLeft(
+            window?.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin ?? NSEvent.mouseLocation
         )
+        if let picked = geometry.hitTest(cursor, columnFallback: true) {
+            onSelect?(picked)
+        } else {
+            onCancel?()
+        }
+    }
+}
 
-        let columns = min(3, max(1, state.assistCandidates.count))
-        let rows = Int(ceil(Double(state.assistCandidates.count) / Double(columns)))
-        let padding: CGFloat = 24
-        let gap: CGFloat = 12
-        let cellWidth = (local.width - padding * 2 - gap * CGFloat(columns - 1)) / CGFloat(columns)
-        let cellHeight = min(88, (local.height - padding * 2 - gap * CGFloat(rows - 1)) / CGFloat(rows))
+private final class HighlightHUD: NSPanel {
+    private let fillView = HighlightView()
 
-        for (index, candidate) in state.assistCandidates.enumerated() {
+    init() {
+        super.init(
+            contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        isOpaque = false
+        backgroundColor = .clear
+        hasShadow = false
+        level = .statusBar
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        hidesOnDeactivate = false
+        ignoresMouseEvents = true
+        contentView = fillView
+    }
+
+    func show(
+        zone: Rect,
+        candidates: [SnapCandidate],
+        onSelect: ((SnapCandidate) -> Void)?,
+        onCancel: (() -> Void)?
+    ) {
+        let frame = CoordinateSpace.topLeftRectToCocoa(zone).insetBy(dx: 6, dy: 6)
+        setFrame(frame, display: true)
+        ignoresMouseEvents = candidates.isEmpty
+        fillView.candidates = candidates
+        fillView.onSelect = onSelect
+        fillView.onCancel = onCancel
+        fillView.rebuild()
+        orderFrontRegardless()
+    }
+
+    func hide() {
+        fillView.candidates = []
+        fillView.rebuild()
+        orderOut(nil)
+    }
+}
+
+private final class HighlightView: NSView {
+    var candidates: [SnapCandidate] = []
+    var onSelect: ((SnapCandidate) -> Void)?
+    var onCancel: (() -> Void)?
+    private var buttons: [AssistButton] = []
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 12, yRadius: 12)
+        NSColor.systemBlue.withAlphaComponent(0.28).setFill()
+        NSColor.systemBlue.withAlphaComponent(0.9).setStroke()
+        path.lineWidth = 3
+        path.fill()
+        path.stroke()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if !candidates.isEmpty {
+            onCancel?()
+        }
+    }
+
+    func rebuild() {
+        buttons.forEach { $0.removeFromSuperview() }
+        buttons.removeAll()
+        guard !candidates.isEmpty else { return }
+
+        let columns = min(3, max(1, candidates.count))
+        let rows = Int(ceil(Double(candidates.count) / Double(columns)))
+        let padding: CGFloat = 20
+        let gap: CGFloat = 10
+        let cellWidth = (bounds.width - padding * 2 - gap * CGFloat(columns - 1)) / CGFloat(columns)
+        let cellHeight = min(72, (bounds.height - padding * 2 - gap * CGFloat(rows - 1)) / CGFloat(rows))
+
+        for (index, candidate) in candidates.enumerated() {
             let col = index % columns
             let row = index / columns
-            let frame = NSRect(
-                x: local.minX + padding + CGFloat(col) * (cellWidth + gap),
-                y: local.minY + padding + CGFloat(row) * (cellHeight + gap),
+            let button = AssistButton(candidate: candidate)
+            button.frame = NSRect(
+                x: padding + CGFloat(col) * (cellWidth + gap),
+                y: padding + CGFloat(row) * (cellHeight + gap),
                 width: cellWidth,
                 height: cellHeight
             )
-            let button = AssistButton(candidate: candidate)
-            button.frame = frame
             button.onSelect = { [weak self] in
-                self?.onAssistSelect?(candidate)
+                self?.onSelect?(candidate)
             }
             addSubview(button)
-            assistButtons.append(button)
+            buttons.append(button)
         }
     }
 }
@@ -268,25 +278,18 @@ private final class AssistButton: NSControl {
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 10, yRadius: 10)
-        NSColor.white.withAlphaComponent(0.14).setFill()
+        NSColor.white.withAlphaComponent(0.16).setFill()
         path.fill()
 
-        let iconRect = NSRect(x: 16, y: (bounds.height - 36) / 2, width: 36, height: 36)
+        let iconRect = NSRect(x: 12, y: (bounds.height - 28) / 2, width: 28, height: 28)
         candidate.icon?.draw(in: iconRect)
-
-        let titleRect = NSRect(
-            x: 60,
-            y: 0,
-            width: max(0, bounds.width - 72),
-            height: bounds.height
-        )
         let title = NSAttributedString(
             string: candidate.title,
             attributes: [
-                .font: NSFont.systemFont(ofSize: 13, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 12, weight: .medium),
                 .foregroundColor: NSColor.white,
             ]
         )
-        title.draw(in: titleRect)
+        title.draw(in: NSRect(x: 48, y: 0, width: max(0, bounds.width - 56), height: bounds.height))
     }
 }

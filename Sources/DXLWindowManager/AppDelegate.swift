@@ -27,7 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastTrusted: Bool?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        AppLog.info("launched accessibility=\(AccessibilityPermission.isGranted) log=\(AppLog.fileURL.path)")
+        AppLog.info("launched version=\(AppVersion.string) accessibility=\(AccessibilityPermission.isGranted) log=\(AppLog.fileURL.path)")
         RestoreStore.shared.persistURL = AppSupport.restoreURL
         RestoreStore.shared.load()
         LayoutStore.load()

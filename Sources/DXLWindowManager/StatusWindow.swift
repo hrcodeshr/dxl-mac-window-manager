@@ -18,14 +18,14 @@ final class StatusWindowController {
             backing: .buffered,
             defer: false
         )
-        window.title = "DXL Window Manager"
+        window.title = "DXL Window Manager \(AppVersion.string)"
         window.isReleasedWhenClosed = false
         window.center()
 
         let view = NSView(frame: window.contentView!.bounds)
         view.autoresizingMask = [.width, .height]
 
-        let title = NSTextField(labelWithString: "DXL Window Manager is running")
+        let title = NSTextField(labelWithString: "DXL Window Manager \(AppVersion.string) is running")
         title.font = NSFont.systemFont(ofSize: 16, weight: .semibold)
         title.frame = NSRect(x: 24, y: 160, width: 372, height: 24)
 
@@ -50,7 +50,7 @@ final class StatusWindowController {
         let accessLine = granted
             ? "Accessibility is granted. Drag to an edge, a corner, or the top layout bar. Hover the green button for the same layouts."
             : "Accessibility is not granted yet. Click the button below, enable DXL Window Manager, then drag a window to an edge."
-        return "\(accessLine)\n\nLog: \(AppLog.fileURL.path)\nLook for the split-rectangle icon in the menu bar."
+        return "\(accessLine)\n\nThis window must say \(AppVersion.string). If it does not, quit the old app first.\nLog: \(AppLog.fileURL.path)"
     }
 
     @objc private func requestAccess() {

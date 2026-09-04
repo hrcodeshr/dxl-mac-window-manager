@@ -11,7 +11,7 @@ final class GreenButtonMonitor {
         let handler: (NSEvent) -> Void = { [weak self] _ in
             self?.update()
         }
-        if let moved = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged], handler: handler) {
+        if let moved = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved], handler: handler) {
             monitors.append(moved)
         }
         if let local = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved], handler: { event in
