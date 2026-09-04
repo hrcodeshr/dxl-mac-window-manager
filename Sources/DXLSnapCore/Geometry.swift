@@ -184,6 +184,7 @@ public enum LayoutCatalog {
         leftAndStacked,
         quadrants,
         topBottom,
+        maximize,
     ]
 
     public static var pickerLayouts: [SnapLayout] {

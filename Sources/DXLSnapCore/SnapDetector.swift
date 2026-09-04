@@ -66,19 +66,30 @@ public enum SnapDetector {
         visible: Rect,
         policy: SnapPolicy = .default
     ) -> DragTarget {
-        guard display.contains(cursor) || visible.contains(cursor) else { return .none }
+        let padded = Rect(
+            x: display.minX - 16,
+            y: display.minY - 16,
+            width: display.width + 32,
+            height: display.height + 32
+        )
+        guard padded.contains(cursor) || visible.contains(cursor) else { return .none }
+
+        let point = Point(
+            x: min(max(cursor.x, display.minX), display.maxX),
+            y: min(max(cursor.y, display.minY), display.maxY)
+        )
 
         let corner = min(policy.cornerSize, display.width / 3, display.height / 3)
         let edge = policy.edgeThickness
-        let inLeft = cursor.x <= display.minX + edge
-        let inRight = cursor.x >= display.maxX - edge
-        let inTop = cursor.y <= display.minY + edge
-        let inBottom = cursor.y >= display.maxY - edge
-        let tightCorner = min(40.0, corner)
-        let inTightLeft = cursor.x <= display.minX + tightCorner
-        let inTightRight = cursor.x >= display.maxX - tightCorner
-        let inTightTop = cursor.y <= display.minY + tightCorner
-        let inTightBottom = cursor.y >= display.maxY - tightCorner
+        let inLeft = point.x <= display.minX + edge
+        let inRight = point.x >= display.maxX - edge
+        let inTop = point.y <= display.minY + edge
+        let inBottom = point.y >= display.maxY - edge
+        let tightCorner = min(72.0, corner)
+        let inTightLeft = point.x <= display.minX + tightCorner
+        let inTightRight = point.x >= display.maxX - tightCorner
+        let inTightTop = point.y <= display.minY + tightCorner
+        let inTightBottom = point.y >= display.maxY - tightCorner
 
         if inTightLeft && inTightTop {
             return .zone(layoutID: LayoutCatalog.quadrants.id, zoneIndex: 0)
@@ -93,8 +104,9 @@ public enum SnapDetector {
             return .zone(layoutID: LayoutCatalog.quadrants.id, zoneIndex: 3)
         }
 
-        let pickerBottom = visible.minY + policy.topPickerThickness
-        if cursor.y >= display.minY && cursor.y <= pickerBottom {
+        let pickerDepth = max(policy.topPickerThickness, min(260, visible.height * 0.22))
+        let pickerBottom = visible.minY + pickerDepth
+        if point.y <= pickerBottom {
             return .layoutPicker
         }
 
@@ -218,5 +230,20 @@ public struct LayoutPickerGeometry: Equatable, Sendable {
             }
         }
         return nil
+    }
+
+    public func nearest(_ cursor: Point) -> PickerHit? {
+        if let hit = hitTest(cursor, columnFallback: true) {
+            return hit
+        }
+        guard let item = items.min(by: { abs($0.frame.midX - cursor.x) < abs($1.frame.midX - cursor.x) }) else {
+            return nil
+        }
+        if let nearest = item.zoneFrames.enumerated().min(by: {
+            abs($0.element.midX - cursor.x) < abs($1.element.midX - cursor.x)
+        }) {
+            return PickerHit(layoutID: item.layout.id, zoneIndex: nearest.offset)
+        }
+        return PickerHit(layoutID: item.layout.id, zoneIndex: 0)
     }
 }

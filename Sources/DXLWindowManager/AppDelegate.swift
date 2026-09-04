@@ -33,6 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LayoutStore.load()
         menuBar = MenuBarController(appDelegate: self)
         dragMonitor = DragSnapMonitor()
+        dragMonitor?.statusHandler = { [weak self] text in
+            self?.menuBar?.setDragStatus(text)
+        }
         hotkeys = HotkeyMonitor()
         greenButtonMonitor = GreenButtonMonitor()
         layoutEditor = LayoutEditorController()

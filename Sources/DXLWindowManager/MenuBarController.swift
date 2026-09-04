@@ -15,6 +15,10 @@ final class MenuBarController {
         rebuildMenu()
     }
 
+    func setDragStatus(_ text: String?) {
+        statusItem.button?.title = text.map { " \($0)" } ?? ""
+    }
+
     func rebuildMenu() {
         let menu = NSMenu()
         let trusted = AccessibilityPermission.isGranted

@@ -23,10 +23,11 @@ final class SnapRuntime {
         if Settings.snapAssistEnabled, let next = remaining.first {
             let candidates = WindowEngine.candidateWindows(excluding: window.pid)
             if !candidates.isEmpty {
-                let zone = layout.zones[next].frame(in: visible, gap: Settings.gap)
+                let context = ScreenSnapContext(screen: screen, cocoaCursor: NSEvent.mouseLocation)
+                let zone = layout.zones[next].frame(in: context.visible, gap: Settings.gap)
                 assist = AssistSession(layout: layout, filled: [index], screen: screen)
                 overlay.showAssist(
-                    on: screen,
+                    on: context,
                     zone: zone,
                     candidates: candidates,
                     onSelect: { [weak self] candidate in
@@ -57,6 +58,7 @@ final class SnapRuntime {
             return
         }
         let visible = CoordinateSpace.visibleTopLeftRect(for: assist.screen)
+        let context = ScreenSnapContext(screen: assist.screen, cocoaCursor: NSEvent.mouseLocation)
         let frame = assist.layout.zones[next].frame(in: visible, gap: Settings.gap)
         _ = SnapApply.snap(window, to: frame, reason: "assist \(assist.layout.id)[\(next)]")
 
@@ -65,7 +67,7 @@ final class SnapRuntime {
         let stillOpen = assist.layout.zones.indices.filter { !filled.contains($0) }
         if let following = stillOpen.first {
             self.assist = AssistSession(layout: assist.layout, filled: filled, screen: assist.screen)
-            let zone = assist.layout.zones[following].frame(in: visible, gap: Settings.gap)
+            let zone = assist.layout.zones[following].frame(in: context.visible, gap: Settings.gap)
             let candidates = WindowEngine.candidateWindows(excluding: candidate.pid)
             if candidates.isEmpty {
                 self.assist = nil
@@ -73,7 +75,7 @@ final class SnapRuntime {
                 return
             }
             overlay.showAssist(
-                on: assist.screen,
+                on: context,
                 zone: zone,
                 candidates: candidates,
                 onSelect: { [weak self] nextCandidate in

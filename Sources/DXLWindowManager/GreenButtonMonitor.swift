@@ -40,17 +40,13 @@ final class GreenButtonMonitor {
         }
 
         let mouse = NSEvent.mouseLocation
+        guard let context = CoordinateSpace.snapContext(at: mouse) else { return }
+
         guard let window = WindowEngine.windowAtCocoaPoint(mouse) else {
             if visible {
-                let cursor = CoordinateSpace.cocoaPointToTopLeft(mouse)
-                if let screen = CoordinateSpace.screenContaining(cocoaPoint: mouse) {
-                    let picker = LayoutPickerGeometry.make(
-                        screen: CoordinateSpace.visibleTopLeftRect(for: screen),
-                        anchor: nil
-                    )
-                    if picker.bar.contains(cursor) {
-                        return
-                    }
+                let picker = LayoutPickerGeometry.make(screen: context.visible)
+                if picker.bar.contains(context.cursor) {
+                    return
                 }
                 hide()
             }
@@ -64,23 +60,22 @@ final class GreenButtonMonitor {
         }
 
         let slop = button.inset(by: -14)
-        let cursor = CoordinateSpace.cocoaPointToTopLeft(mouse)
-        let overButton = slop.contains(cursor)
+        let cursorAX = CoordinateSpace.cocoaPointToTopLeft(mouse)
+        let overButton = slop.contains(cursorAX)
         guard overButton || visible else { return }
 
-        guard let screen = CoordinateSpace.screenContaining(cocoaPoint: mouse) else { return }
-        let visibleFrame = CoordinateSpace.visibleTopLeftRect(for: screen)
-        let anchor = Point(x: button.maxX + 10, y: button.maxY + 8)
-        let picker = LayoutPickerGeometry.make(screen: visibleFrame, anchor: anchor)
-        if visible && !overButton && !picker.bar.contains(cursor) {
+        let displayAX = CoordinateSpace.displayTopLeftRect(for: context.screen)
+        let anchor = Point(x: button.maxX + 10, y: max(context.visible.minY + 8, button.maxY - displayAX.minY + 8))
+        let picker = LayoutPickerGeometry.make(screen: context.visible, anchor: anchor)
+        if visible && !overButton && !picker.bar.contains(context.cursor) {
             hide()
             return
         }
 
-        let hit = picker.hitTest(cursor, columnFallback: true)
+        let hit = picker.nearest(context.cursor)
         let zone: Rect?
         if let hit, let layout = LayoutCatalog.layout(id: hit.layoutID) {
-            zone = layout.zones[hit.zoneIndex].frame(in: visibleFrame, gap: Settings.gap)
+            zone = layout.zones[hit.zoneIndex].frame(in: context.visible, gap: Settings.gap)
         } else {
             zone = nil
         }
@@ -88,13 +83,13 @@ final class GreenButtonMonitor {
         hoveredWindow = window
         visible = true
         SnapRuntime.shared.overlay.showPicker(
-            on: screen,
+            on: context,
             picker: picker,
             hit: hit,
             zone: zone,
             clickable: true,
             onSelect: { [weak self] selected in
-                self?.select(selected, window: window, screen: screen)
+                self?.select(selected, window: window, screen: context.screen)
             },
             onCancel: { [weak self] in
                 self?.hide()

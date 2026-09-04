@@ -60,6 +60,15 @@ enum DXLSnapCoreCheck {
             ) == .layoutPicker
         )
         check(
+            "cursor slightly above the display still opens the picker",
+            SnapDetector.target(
+                cursor: Point(x: 960, y: -4),
+                display: display,
+                visible: visible,
+                policy: policy
+            ) == .layoutPicker
+        )
+        check(
             "center does not snap",
             SnapDetector.target(cursor: Point(x: 960, y: 540), screen: screen, policy: policy)
                 == .none
@@ -82,6 +91,8 @@ enum DXLSnapCoreCheck {
                 "picker hit selects zone",
                 hit == PickerHit(layoutID: LayoutCatalog.twoEqual.id, zoneIndex: 1)
             )
+            let far = picker.nearest(Point(x: 10, y: 10))
+            check("picker nearest always selects a layout", far?.layoutID != nil)
         } else {
             check("picker includes two-equal layout", false)
         }

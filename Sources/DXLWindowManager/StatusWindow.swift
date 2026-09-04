@@ -13,7 +13,7 @@ final class StatusWindowController {
 
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 220),
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 280),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -27,10 +27,10 @@ final class StatusWindowController {
 
         let title = NSTextField(labelWithString: "DXL Window Manager \(AppVersion.string) is running")
         title.font = NSFont.systemFont(ofSize: 16, weight: .semibold)
-        title.frame = NSRect(x: 24, y: 160, width: 372, height: 24)
+        title.frame = NSRect(x: 24, y: 220, width: 392, height: 24)
 
         let body = NSTextField(wrappingLabelWithString: bodyText)
-        body.frame = NSRect(x: 24, y: 56, width: 372, height: 96)
+        body.frame = NSRect(x: 24, y: 56, width: 392, height: 156)
 
         let access = NSButton(title: "Request Accessibility Access…", target: nil, action: nil)
         access.bezelStyle = .rounded
@@ -50,7 +50,7 @@ final class StatusWindowController {
         let accessLine = granted
             ? "Accessibility is granted. Drag to an edge, a corner, or the top layout bar. Hover the green button for the same layouts."
             : "Accessibility is not granted yet. Click the button below, enable DXL Window Manager, then drag a window to an edge."
-        return "\(accessLine)\n\nThis window must say \(AppVersion.string). If it does not, quit the old app first.\nLog: \(AppLog.fileURL.path)"
+        return "\(accessLine)\n\nThis window must say \(AppVersion.string). While you drag, the menu-bar icon should read Drag / Picker / Left.\n\nIf macOS still maximizes on top, turn off Desktop & Dock → Drag windows to screen edges to tile.\nLog: \(AppLog.fileURL.path)"
     }
 
     @objc private func requestAccess() {

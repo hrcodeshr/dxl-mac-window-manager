@@ -35,7 +35,14 @@ enum CoordinateSpace {
     }
 
     static func screenContaining(cocoaPoint: NSPoint) -> NSScreen? {
-        NSScreen.screens.first { $0.frame.contains(cocoaPoint) } ?? NSScreen.main
+        NSScreen.screens.first { $0.frame.insetBy(dx: -4, dy: -4).contains(cocoaPoint) }
+            ?? NSScreen.main
+    }
+
+    /// Top-left space for snap targeting on one display. Y = 0 at that screen's physical top.
+    static func snapContext(at cocoaPoint: NSPoint = NSEvent.mouseLocation) -> ScreenSnapContext? {
+        guard let screen = screenContaining(cocoaPoint: cocoaPoint) else { return nil }
+        return ScreenSnapContext(screen: screen, cocoaCursor: cocoaPoint)
     }
 
     static func visibleTopLeftRect(for screen: NSScreen) -> Rect {
@@ -44,5 +51,37 @@ enum CoordinateSpace {
 
     static func displayTopLeftRect(for screen: NSScreen) -> Rect {
         cocoaRectToTopLeft(screen.frame)
+    }
+}
+
+struct ScreenSnapContext {
+    let screen: NSScreen
+    let cocoaCursor: NSPoint
+    let cursor: Point
+    let display: Rect
+    let visible: Rect
+
+    init(screen: NSScreen, cocoaCursor: NSPoint) {
+        self.screen = screen
+        self.cocoaCursor = cocoaCursor
+        let frame = screen.frame
+        let visibleFrame = screen.visibleFrame
+        cursor = Point(x: Double(cocoaCursor.x), y: Double(frame.maxY - cocoaCursor.y))
+        display = Rect(x: Double(frame.minX), y: 0, width: Double(frame.width), height: Double(frame.height))
+        visible = Rect(
+            x: Double(visibleFrame.minX),
+            y: Double(frame.maxY - visibleFrame.maxY),
+            width: Double(visibleFrame.width),
+            height: Double(visibleFrame.height)
+        )
+    }
+
+    func cocoaRect(fromLocal rect: Rect) -> NSRect {
+        NSRect(
+            x: rect.x,
+            y: Double(screen.frame.maxY) - rect.y - rect.height,
+            width: rect.width,
+            height: rect.height
+        )
     }
 }

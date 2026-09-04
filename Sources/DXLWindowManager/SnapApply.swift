@@ -1,3 +1,4 @@
+import Foundation
 import DXLSnapCore
 
 enum SnapApply {
@@ -11,6 +12,9 @@ enum SnapApply {
         if ok {
             RestoreStore.shared.markSnapped(key: key, frame: frame)
             AppLog.info("snap \(reason) pid=\(window.pid) id=\(window.windowID) title=\(window.title ?? "") frame=\(describe(frame))")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                _ = window.setFrame(frame)
+            }
         } else {
             AppLog.error("snap failed \(reason) pid=\(window.pid) id=\(window.windowID)")
         }

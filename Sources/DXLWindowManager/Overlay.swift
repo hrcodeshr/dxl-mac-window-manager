@@ -14,13 +14,13 @@ final class OverlayController {
     private let pickerHUD = PickerHUD()
     private let highlightHUD = HighlightHUD()
 
-    func showHighlight(on screen: NSScreen, zone: Rect) {
+    func showHighlight(on context: ScreenSnapContext, zone: Rect) {
         pickerHUD.hide()
-        highlightHUD.show(zone: zone, candidates: [], onSelect: nil, onCancel: nil)
+        highlightHUD.show(context: context, zone: zone, candidates: [], onSelect: nil, onCancel: nil)
     }
 
     func showPicker(
-        on screen: NSScreen,
+        on context: ScreenSnapContext,
         picker: LayoutPickerGeometry,
         hit: PickerHit?,
         zone: Rect?,
@@ -29,23 +29,33 @@ final class OverlayController {
         onCancel: (() -> Void)? = nil
     ) {
         if let zone {
-            highlightHUD.show(zone: zone, candidates: [], onSelect: nil, onCancel: nil)
+            highlightHUD.show(context: context, zone: zone, candidates: [], onSelect: nil, onCancel: nil)
         } else {
             highlightHUD.hide()
         }
-        pickerHUD.show(picker: picker, hit: hit, clickable: clickable, onSelect: onSelect, onCancel: onCancel)
-        AppLog.info("picker HUD shown clickable=\(clickable) hit=\(hit?.layoutID ?? "none")")
+        let becameVisible = !pickerHUD.isVisible
+        pickerHUD.show(
+            context: context,
+            picker: picker,
+            hit: hit,
+            clickable: clickable,
+            onSelect: onSelect,
+            onCancel: onCancel
+        )
+        if becameVisible {
+            AppLog.info("picker HUD shown clickable=\(clickable) hit=\(hit?.layoutID ?? "none")")
+        }
     }
 
     func showAssist(
-        on screen: NSScreen,
+        on context: ScreenSnapContext,
         zone: Rect,
         candidates: [SnapCandidate],
         onSelect: @escaping (SnapCandidate) -> Void,
         onCancel: @escaping () -> Void
     ) {
         pickerHUD.hide()
-        highlightHUD.show(zone: zone, candidates: candidates, onSelect: onSelect, onCancel: onCancel)
+        highlightHUD.show(context: context, zone: zone, candidates: candidates, onSelect: onSelect, onCancel: onCancel)
     }
 
     func hide() {
@@ -54,47 +64,60 @@ final class OverlayController {
     }
 }
 
-private final class PickerHUD: NSPanel {
+private final class HUDWindow: NSWindow {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+
+private final class PickerHUD {
+    private let window: HUDWindow
     private let pickerView = PickerHUDView()
 
     init() {
-        super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 800, height: 140),
-            styleMask: [.borderless, .nonactivatingPanel],
+        window = HUDWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 156),
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
-        isOpaque = true
-        backgroundColor = NSColor.black.withAlphaComponent(0.92)
-        hasShadow = true
-        level = .statusBar
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        hidesOnDeactivate = false
-        title = "DXL Snap Layouts"
-        contentView = pickerView
+        window.isOpaque = true
+        window.backgroundColor = NSColor(calibratedWhite: 0.08, alpha: 1)
+        window.hasShadow = true
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)) + 8)
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        window.hidesOnDeactivate = false
+        window.isReleasedWhenClosed = false
+        window.title = "DXL Snap Layouts"
+        window.contentView = pickerView
+        window.animationBehavior = .none
+        window.alphaValue = 1
     }
 
     func show(
+        context: ScreenSnapContext,
         picker: LayoutPickerGeometry,
         hit: PickerHit?,
         clickable: Bool,
         onSelect: ((PickerHit) -> Void)?,
         onCancel: (() -> Void)?
     ) {
-        let frame = CoordinateSpace.topLeftRectToCocoa(picker.bar)
-        setFrame(frame, display: true)
-        ignoresMouseEvents = !clickable
-        acceptsMouseMovedEvents = clickable
+        let frame = context.cocoaRect(fromLocal: picker.bar)
+        window.setFrame(frame, display: true)
+        window.ignoresMouseEvents = !clickable
+        window.acceptsMouseMovedEvents = clickable
         pickerView.geometry = picker
         pickerView.hit = hit
         pickerView.onSelect = onSelect
         pickerView.onCancel = onCancel
         pickerView.needsDisplay = true
-        orderFrontRegardless()
+        window.orderFrontRegardless()
+        window.displayIfNeeded()
     }
 
+    var isVisible: Bool { window.isVisible }
+
     func hide() {
-        orderOut(nil)
+        window.orderOut(nil)
     }
 }
 
@@ -107,17 +130,17 @@ private final class PickerHUDView: NSView {
     override var isFlipped: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.black.withAlphaComponent(0.92).setFill()
+        NSColor(calibratedWhite: 0.08, alpha: 1).setFill()
         bounds.fill()
 
         let caption = NSAttributedString(
-            string: "DXL layouts — drop or click a pane",
+            string: "DXL layouts — drop on a pane",
             attributes: [
-                .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+                .font: NSFont.systemFont(ofSize: 13, weight: .semibold),
                 .foregroundColor: NSColor.white,
             ]
         )
-        caption.draw(at: NSPoint(x: 16, y: 6))
+        caption.draw(at: NSPoint(x: 16, y: 8))
 
         guard let geometry else { return }
         let origin = geometry.bar
@@ -129,8 +152,17 @@ private final class PickerHUDView: NSView {
                 height: item.frame.height
             )
             let selected = hit?.layoutID == item.layout.id
-            NSColor.white.withAlphaComponent(selected ? 0.2 : 0.1).setFill()
+            NSColor.white.withAlphaComponent(selected ? 0.22 : 0.1).setFill()
             NSBezierPath(roundedRect: frame, xRadius: 8, yRadius: 8).fill()
+
+            let name = NSAttributedString(
+                string: item.layout.name,
+                attributes: [
+                    .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                    .foregroundColor: NSColor.white,
+                ]
+            )
+            name.draw(at: NSPoint(x: frame.minX + 6, y: frame.maxY - 14))
 
             for (index, zone) in item.zoneFrames.enumerated() {
                 let zoneRect = NSRect(
@@ -151,10 +183,13 @@ private final class PickerHUDView: NSView {
             onCancel?()
             return
         }
-        let cursor = CoordinateSpace.cocoaPointToTopLeft(
-            window?.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin ?? NSEvent.mouseLocation
-        )
-        if let picked = geometry.hitTest(cursor, columnFallback: true) {
+        let screenPoint = window?.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin
+            ?? NSEvent.mouseLocation
+        guard let context = CoordinateSpace.snapContext(at: screenPoint) else {
+            onCancel?()
+            return
+        }
+        if let picked = geometry.nearest(context.cursor) {
             onSelect?(picked)
         } else {
             onCancel?()
@@ -162,46 +197,50 @@ private final class PickerHUDView: NSView {
     }
 }
 
-private final class HighlightHUD: NSPanel {
+private final class HighlightHUD {
+    private let window: HUDWindow
     private let fillView = HighlightView()
 
     init() {
-        super.init(
+        window = HUDWindow(
             contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
-            styleMask: [.borderless, .nonactivatingPanel],
+            styleMask: [.borderless],
             backing: .buffered,
             defer: false
         )
-        isOpaque = false
-        backgroundColor = .clear
-        hasShadow = false
-        level = .statusBar
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        hidesOnDeactivate = false
-        ignoresMouseEvents = true
-        contentView = fillView
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = false
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.popUpMenuWindow)) + 7)
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        window.hidesOnDeactivate = false
+        window.isReleasedWhenClosed = false
+        window.ignoresMouseEvents = true
+        window.contentView = fillView
+        window.animationBehavior = .none
     }
 
     func show(
+        context: ScreenSnapContext,
         zone: Rect,
         candidates: [SnapCandidate],
         onSelect: ((SnapCandidate) -> Void)?,
         onCancel: (() -> Void)?
     ) {
-        let frame = CoordinateSpace.topLeftRectToCocoa(zone).insetBy(dx: 6, dy: 6)
-        setFrame(frame, display: true)
-        ignoresMouseEvents = candidates.isEmpty
+        let frame = context.cocoaRect(fromLocal: zone).insetBy(dx: 6, dy: 6)
+        window.setFrame(frame, display: true)
+        window.ignoresMouseEvents = candidates.isEmpty
         fillView.candidates = candidates
         fillView.onSelect = onSelect
         fillView.onCancel = onCancel
         fillView.rebuild()
-        orderFrontRegardless()
+        window.orderFrontRegardless()
     }
 
     func hide() {
         fillView.candidates = []
         fillView.rebuild()
-        orderOut(nil)
+        window.orderOut(nil)
     }
 }
 
