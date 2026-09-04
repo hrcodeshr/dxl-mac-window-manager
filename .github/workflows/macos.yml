@@ -16,7 +16,7 @@ jobs:
         run: swift --version
 
       - name: Test
-        run: swift test
+        run: swift run DXLSnapCoreCheck
 
       - name: Package app
         run: bash scripts/package-app.sh

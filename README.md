@@ -16,6 +16,8 @@ Swift is the most efficient implementation for this on Mac:
 
 This repo cannot be compiled on Windows. Use GitHub Actions for a Mac build, or compile on a Mac.
 
+You do not need Xcode. A Swift toolchain is enough. `make test` does not use XCTest.
+
 ## Build (macOS 13+)
 
 ```bash

@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(name: "DXLSnapCore", targets: ["DXLSnapCore"]),
         .executable(name: "DXLWindowManager", targets: ["DXLWindowManager"]),
+        .executable(name: "DXLSnapCoreCheck", targets: ["DXLSnapCoreCheck"]),
     ],
     targets: [
         .target(
@@ -20,10 +21,10 @@ let package = Package(
             dependencies: ["DXLSnapCore"],
             path: "Sources/DXLWindowManager"
         ),
-        .testTarget(
-            name: "DXLSnapCoreTests",
+        .executableTarget(
+            name: "DXLSnapCoreCheck",
             dependencies: ["DXLSnapCore"],
-            path: "Tests/DXLSnapCoreTests"
+            path: "Tests/DXLSnapCoreCheck"
         ),
     ]
 )

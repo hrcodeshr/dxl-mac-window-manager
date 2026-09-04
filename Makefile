@@ -4,7 +4,7 @@ build:
 	swift build
 
 test:
-	swift test
+	swift run DXLSnapCoreCheck
 
 package:
 	bash scripts/package-app.sh
