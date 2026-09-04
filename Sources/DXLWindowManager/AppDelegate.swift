@@ -18,16 +18,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
     private var dragMonitor: DragSnapMonitor?
     private var hotkeys: HotkeyMonitor?
+    private var greenButtonMonitor: GreenButtonMonitor?
     private var accessTimer: Timer?
     private var statusWindow: StatusWindowController?
+    private var layoutEditor: LayoutEditorController?
     private var servicesRunning = false
     private var lastTrusted: Bool?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppLog.info("launched accessibility=\(AccessibilityPermission.isGranted) log=\(AppLog.fileURL.path)")
+        RestoreStore.shared.persistURL = AppSupport.restoreURL
+        RestoreStore.shared.load()
+        LayoutStore.load()
         menuBar = MenuBarController(appDelegate: self)
         dragMonitor = DragSnapMonitor()
         hotkeys = HotkeyMonitor()
+        greenButtonMonitor = GreenButtonMonitor()
+        layoutEditor = LayoutEditorController()
         statusWindow = StatusWindowController()
         statusWindow?.show()
         refreshAccess()
@@ -46,11 +53,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppLog.info("accessibility granted; starting snap services")
             dragMonitor?.start()
             hotkeys?.start()
+            greenButtonMonitor?.start()
             servicesRunning = true
         } else if !granted && servicesRunning {
             AppLog.info("accessibility lost; stopping snap services")
             dragMonitor?.stop()
             hotkeys?.stop()
+            greenButtonMonitor?.stop()
             servicesRunning = false
         }
         if lastTrusted != granted {
@@ -61,6 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showStatusWindow() {
         statusWindow?.show()
+    }
+
+    func showLayoutEditor() {
+        layoutEditor?.show()
     }
 
     func applicationWillTerminate(_ notification: Notification) {

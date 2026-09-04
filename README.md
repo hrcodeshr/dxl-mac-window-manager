@@ -53,9 +53,11 @@ If macOS Sequoia's built-in tiling also fires, turn off **Tile by dragging windo
 
 - **Left / right edge:** half screen
 - **Corners:** quadrants
-- **Top edge:** layout picker (two columns, 2/3, three columns, stacked, quadrants, two rows). Drop on a zone. If you miss a zone, the window maximizes.
-- **After snap:** remaining windows are offered for the empty pane (Snap Assist). Click one, or click outside / press Esc to dismiss.
-- **Unsnap:** drag a snapped window away from the edges and it returns to its previous size, the way Windows does.
+- **Top edge:** Windows 11-style layout picker. Drop on a pane. If you miss a pane, the window maximizes.
+- **Green button:** hover the window’s green traffic-light to get the same picker, then click a pane.
+- **After snap:** remaining windows are offered for the empty pane. Click one, or click outside / press Esc.
+- **Unsnap:** drag a snapped window off the edge to restore its previous size. That size is remembered across launches.
+- **Custom layouts:** menu bar → **Edit Custom Layouts…**. Add named zone sets (`x y width height` fractions). They appear in the picker.
 
 ## Keyboard
 

@@ -6,9 +6,9 @@ public struct SnapPolicy: Equatable, Sendable {
     public var topPickerThickness: Double
 
     public static let `default` = SnapPolicy(
-        edgeThickness: 18,
-        cornerSize: 80,
-        topPickerThickness: 32
+        edgeThickness: 20,
+        cornerSize: 40,
+        topPickerThickness: 80
     )
 
     public init(edgeThickness: Double, cornerSize: Double, topPickerThickness: Double) {
@@ -62,21 +62,22 @@ public enum SnapDetector {
         let inRight = cursor.x >= screen.maxX - edge
         let inTop = cursor.y <= screen.minY + edge
         let inBottom = cursor.y >= screen.maxY - edge
-        let inLeftCorner = cursor.x <= screen.minX + corner
-        let inRightCorner = cursor.x >= screen.maxX - corner
-        let inTopCorner = cursor.y <= screen.minY + corner
-        let inBottomCorner = cursor.y >= screen.maxY - corner
+        let tightCorner = min(40.0, corner)
+        let inTightLeft = cursor.x <= screen.minX + tightCorner
+        let inTightRight = cursor.x >= screen.maxX - tightCorner
+        let inTightTop = cursor.y <= screen.minY + tightCorner
+        let inTightBottom = cursor.y >= screen.maxY - tightCorner
 
-        if inLeftCorner && inTopCorner {
+        if inTightLeft && inTightTop {
             return .zone(layoutID: LayoutCatalog.quadrants.id, zoneIndex: 0)
         }
-        if inRightCorner && inTopCorner {
+        if inTightRight && inTightTop {
             return .zone(layoutID: LayoutCatalog.quadrants.id, zoneIndex: 1)
         }
-        if inLeftCorner && inBottomCorner {
+        if inTightLeft && inTightBottom {
             return .zone(layoutID: LayoutCatalog.quadrants.id, zoneIndex: 2)
         }
-        if inRightCorner && inBottomCorner {
+        if inTightRight && inTightBottom {
             return .zone(layoutID: LayoutCatalog.quadrants.id, zoneIndex: 3)
         }
 
@@ -103,6 +104,22 @@ public enum SnapDetector {
     public static func remainingZoneIndices(layout: SnapLayout, filled: Int) -> [Int] {
         layout.zones.indices.filter { $0 != filled }
     }
+
+    public static func matchingZone(
+        frame: Rect,
+        screen: Rect,
+        gap: Double,
+        layouts: [SnapLayout] = LayoutRegistry.shared.allLayouts
+    ) -> (layout: SnapLayout, index: Int)? {
+        for layout in layouts {
+            for (index, zone) in layout.zones.enumerated() {
+                if RestoreMath.isNearlyEqual(frame, zone.frame(in: screen, gap: gap), tolerance: 12) {
+                    return (layout, index)
+                }
+            }
+        }
+        return nil
+    }
 }
 
 public struct PickerHit: Equatable, Sendable {
@@ -127,18 +144,27 @@ public struct LayoutPickerGeometry: Equatable, Sendable {
 
     public static func make(
         screen: Rect,
-        layouts: [SnapLayout] = LayoutCatalog.pickerLayouts
+        layouts: [SnapLayout] = LayoutRegistry.shared.pickerLayouts,
+        anchor: Point? = nil
     ) -> LayoutPickerGeometry {
-        let itemWidth = 92.0
-        let itemHeight = 62.0
-        let gap = 12.0
-        let padding = 16.0
-        let count = Double(layouts.count)
+        let itemWidth = 120.0
+        let itemHeight = 80.0
+        let gap = 14.0
+        let padding = 20.0
+        let count = Double(max(layouts.count, 1))
         let barWidth = padding * 2 + count * itemWidth + max(0, count - 1) * gap
-        let barHeight = itemHeight + padding * 2
+        let barHeight = itemHeight + padding * 2 + 18
+        var barX = screen.midX - barWidth / 2
+        var barY = screen.minY + 20
+        if let anchor {
+            barX = anchor.x
+            barY = anchor.y
+        }
+        barX = min(max(barX, screen.minX + 8), max(screen.minX + 8, screen.maxX - barWidth - 8))
+        barY = min(max(barY, screen.minY + 8), max(screen.minY + 8, screen.maxY - barHeight - 8))
         let bar = Rect(
-            x: screen.midX - barWidth / 2,
-            y: screen.minY + 12,
+            x: barX,
+            y: barY,
             width: barWidth,
             height: barHeight
         )

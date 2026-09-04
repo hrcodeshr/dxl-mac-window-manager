@@ -3,9 +3,7 @@ import DXLSnapCore
 
 final class DragSnapMonitor {
     private var monitors: [Any] = []
-    private let overlay = OverlayController()
     private var drag: DragSession?
-    private var assist: AssistSession?
 
     private struct DragSession {
         var window: AXWindow
@@ -14,12 +12,6 @@ final class DragSnapMonitor {
         var moved: Bool
         var unsnapping: Bool
         var restoreFrame: Rect?
-    }
-
-    private struct AssistSession {
-        var layout: SnapLayout
-        var filled: Set<Int>
-        var screen: NSScreen
     }
 
     func start() {
@@ -44,7 +36,8 @@ final class DragSnapMonitor {
         let wasRunning = !monitors.isEmpty
         monitors.forEach { NSEvent.removeMonitor($0) }
         monitors.removeAll()
-        overlay.hide()
+        SnapRuntime.shared.isDragging = false
+        SnapRuntime.shared.hideOverlays()
         drag = nil
         if wasRunning {
             AppLog.info("drag monitor stopped")
@@ -56,13 +49,6 @@ final class DragSnapMonitor {
 
         switch event.type {
         case .leftMouseDown:
-            if assist != nil {
-                if event.window == nil {
-                    assist = nil
-                    overlay.hide()
-                }
-                return
-            }
             beginDrag(at: event)
         case .leftMouseDragged:
             updateDrag(at: event)
@@ -74,22 +60,32 @@ final class DragSnapMonitor {
     }
 
     private func beginDrag(at event: NSEvent) {
-        assist = nil
-        overlay.hide()
+        SnapRuntime.shared.hideOverlays()
         let point = NSEvent.mouseLocation
         guard let window = WindowEngine.windowAtCocoaPoint(point), let frame = window.frame else {
             drag = nil
+            SnapRuntime.shared.isDragging = false
             return
         }
-        let unsnapping = RestoreStore.shared.isCurrentlySnapped(key: window.restoreKey, frame: frame)
+
+        let screen = CoordinateSpace.screenContaining(cocoaPoint: point)
+        let visible = screen.map { CoordinateSpace.visibleTopLeftRect(for: $0) }
+        var unsnapping = RestoreStore.shared.isCurrentlySnapped(key: window.restoreKey, frame: frame)
+        var restore = RestoreStore.shared.original(for: window.restoreKey)
+        if !unsnapping, let visible, SnapDetector.matchingZone(frame: frame, screen: visible, gap: Settings.gap) != nil {
+            unsnapping = true
+            restore = restore ?? RestoreMath.defaultFloating(on: visible)
+        }
+
         drag = DragSession(
             window: window,
             initialFrame: frame,
             startMouse: point,
             moved: false,
             unsnapping: unsnapping,
-            restoreFrame: RestoreStore.shared.original(for: window.restoreKey)
+            restoreFrame: restore
         )
+        SnapRuntime.shared.isDragging = true
     }
 
     private func updateDrag(at event: NSEvent) {
@@ -115,8 +111,7 @@ final class DragSnapMonitor {
             }
             session.moved = true
             drag = session
-            AppLog.info("drag pid=\(session.window.pid) title=\(session.window.title ?? "") unsnap=true")
-            presentTarget(for: session.window)
+            presentTarget()
             return
         }
 
@@ -132,15 +127,17 @@ final class DragSnapMonitor {
             guard sameSize && (originMoved || mouseDelta > 8) else { return }
             session.moved = true
             drag = session
-            AppLog.info("drag pid=\(session.window.pid) title=\(session.window.title ?? "") unsnap=false")
         }
-        presentTarget(for: session.window)
+        presentTarget()
     }
 
     private func finishDrag(at event: NSEvent) {
-        defer { drag = nil }
+        defer {
+            drag = nil
+            SnapRuntime.shared.isDragging = false
+        }
         guard let session = drag, session.moved else {
-            overlay.hide()
+            SnapRuntime.shared.hideOverlays()
             return
         }
         guard let resolved = resolveTarget() else {
@@ -148,17 +145,24 @@ final class DragSnapMonitor {
                 RestoreStore.shared.markFloating(key: session.window.restoreKey)
                 AppLog.info("unsnap complete pid=\(session.window.pid)")
             }
-            overlay.hide()
+            SnapRuntime.shared.hideOverlays()
             return
         }
-        apply(resolved, to: session.window)
+        SnapRuntime.shared.apply(
+            layout: resolved.layout,
+            index: resolved.index,
+            window: session.window,
+            screen: resolved.screen,
+            reason: "drag \(resolved.layout.id)[\(resolved.index)]"
+        )
     }
 
-    private func presentTarget(for window: AXWindow) {
+    private func presentTarget() {
         guard let screen = CoordinateSpace.screenContaining(cocoaPoint: NSEvent.mouseLocation) else { return }
         let visible = CoordinateSpace.visibleTopLeftRect(for: screen)
         let cursor = CoordinateSpace.cocoaPointToTopLeft(NSEvent.mouseLocation)
         let target = SnapDetector.target(cursor: cursor, screen: visible)
+        let overlay = SnapRuntime.shared.overlay
 
         switch target {
         case .none:
@@ -173,7 +177,7 @@ final class DragSnapMonitor {
             if let hit, let layout = LayoutCatalog.layout(id: hit.layoutID) {
                 zone = layout.zones[hit.zoneIndex].frame(in: visible, gap: Settings.gap)
             } else {
-                zone = LayoutCatalog.maximize.zones[0].frame(in: visible, gap: Settings.gap)
+                zone = nil
             }
             overlay.showPicker(on: screen, picker: picker, hit: hit, zone: zone)
         case let .zone(layoutID, zoneIndex):
@@ -203,77 +207,6 @@ final class DragSnapMonitor {
         case let .zone(layoutID, zoneIndex):
             guard let layout = LayoutCatalog.layout(id: layoutID) else { return nil }
             return (layout, zoneIndex, screen)
-        }
-    }
-
-    private func apply(_ resolved: (layout: SnapLayout, index: Int, screen: NSScreen), to window: AXWindow) {
-        let visible = CoordinateSpace.visibleTopLeftRect(for: resolved.screen)
-        let frame = resolved.layout.zones[resolved.index].frame(in: visible, gap: Settings.gap)
-        _ = SnapApply.snap(window, to: frame, reason: "drag \(resolved.layout.id)[\(resolved.index)]")
-
-        let remaining = SnapDetector.remainingZoneIndices(layout: resolved.layout, filled: resolved.index)
-        if Settings.snapAssistEnabled, let next = remaining.first {
-            let candidates = WindowEngine.candidateWindows(excluding: window.pid)
-            if !candidates.isEmpty {
-                let zone = resolved.layout.zones[next].frame(in: visible, gap: Settings.gap)
-                assist = AssistSession(layout: resolved.layout, filled: [resolved.index], screen: resolved.screen)
-                overlay.showAssist(
-                    on: resolved.screen,
-                    zone: zone,
-                    candidates: candidates,
-                    onSelect: { [weak self] candidate in
-                        self?.fillAssist(with: candidate)
-                    },
-                    onCancel: { [weak self] in
-                        self?.assist = nil
-                        self?.overlay.hide()
-                    }
-                )
-                return
-            }
-        }
-        overlay.hide()
-    }
-
-    private func fillAssist(with candidate: SnapCandidate) {
-        guard let assist else { return }
-        let remaining = assist.layout.zones.indices.filter { !assist.filled.contains($0) }
-        guard let next = remaining.first, let window = WindowEngine.window(forPID: candidate.pid, matching: candidate.bounds) else {
-            self.assist = nil
-            overlay.hide()
-            return
-        }
-        let visible = CoordinateSpace.visibleTopLeftRect(for: assist.screen)
-        let frame = assist.layout.zones[next].frame(in: visible, gap: Settings.gap)
-        _ = SnapApply.snap(window, to: frame, reason: "assist \(assist.layout.id)[\(next)]")
-
-        var filled = assist.filled
-        filled.insert(next)
-        let stillOpen = assist.layout.zones.indices.filter { !filled.contains($0) }
-        if let following = stillOpen.first {
-            self.assist = AssistSession(layout: assist.layout, filled: filled, screen: assist.screen)
-            let zone = assist.layout.zones[following].frame(in: visible, gap: Settings.gap)
-            let candidates = WindowEngine.candidateWindows(excluding: candidate.pid)
-            if candidates.isEmpty {
-                self.assist = nil
-                overlay.hide()
-                return
-            }
-            overlay.showAssist(
-                on: assist.screen,
-                zone: zone,
-                candidates: candidates,
-                onSelect: { [weak self] nextCandidate in
-                    self?.fillAssist(with: nextCandidate)
-                },
-                onCancel: { [weak self] in
-                    self?.assist = nil
-                    self?.overlay.hide()
-                }
-            )
-        } else {
-            self.assist = nil
-            overlay.hide()
         }
     }
 }

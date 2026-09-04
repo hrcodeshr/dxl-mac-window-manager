@@ -24,7 +24,8 @@ final class OverlayWindow: NSPanel {
     }
 
     func show(state: OverlayState) {
-        ignoresMouseEvents = state.assistCandidates.isEmpty
+        ignoresMouseEvents = state.assistCandidates.isEmpty && !state.clickable
+        acceptsMouseMovedEvents = state.clickable
         overlayView.apply(state)
         orderFrontRegardless()
     }
@@ -42,12 +43,15 @@ struct OverlayState {
     var pickerHit: PickerHit?
     var assistZone: Rect?
     var assistCandidates: [SnapCandidate] = []
+    var clickable = false
 }
 
 final class OverlayView: NSView {
     var state = OverlayState()
     var onAssistSelect: ((SnapCandidate) -> Void)?
     var onAssistCancel: (() -> Void)?
+    var onPickerSelect: ((PickerHit) -> Void)?
+    var onPickerCancel: (() -> Void)?
     private var assistButtons: [AssistButton] = []
 
     override var isFlipped: Bool { true }
@@ -90,8 +94,36 @@ final class OverlayView: NSView {
     override var acceptsFirstResponder: Bool { !state.assistCandidates.isEmpty }
 
     override func mouseDown(with event: NSEvent) {
+        if state.clickable, let picker = state.picker {
+            let cursor = cursorInTopLeft(from: event)
+            if let hit = picker.hitTest(cursor) {
+                onPickerSelect?(hit)
+                return
+            }
+            onPickerCancel?()
+            return
+        }
         guard !state.assistCandidates.isEmpty else { return }
         onAssistCancel?()
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        guard state.clickable, let picker = state.picker else { return }
+        let hit = picker.hitTest(cursorInTopLeft(from: event))
+        if hit != state.pickerHit {
+            var next = state
+            next.pickerHit = hit
+            if let hit, let layout = LayoutCatalog.layout(id: hit.layoutID), let screen = window?.screen {
+                let visible = CoordinateSpace.visibleTopLeftRect(for: screen)
+                next.highlightedZone = layout.zones[hit.zoneIndex].frame(in: visible, gap: Settings.gap)
+            }
+            apply(next)
+        }
+    }
+
+    private func cursorInTopLeft(from event: NSEvent) -> Point {
+        let cocoa = window?.convertToScreen(NSRect(origin: event.locationInWindow, size: .zero)).origin ?? NSEvent.mouseLocation
+        return CoordinateSpace.cocoaPointToTopLeft(cocoa)
     }
 
     override func keyDown(with event: NSEvent) {
@@ -124,8 +156,20 @@ final class OverlayView: NSView {
             height: picker.bar.height
         )
         let barPath = NSBezierPath(roundedRect: bar, xRadius: 16, yRadius: 16)
-        NSColor.black.withAlphaComponent(0.72).setFill()
+        NSColor.black.withAlphaComponent(0.82).setFill()
         barPath.fill()
+        NSColor.white.withAlphaComponent(0.2).setStroke()
+        barPath.lineWidth = 1
+        barPath.stroke()
+
+        let caption = NSAttributedString(
+            string: "Drop on a layout",
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: NSColor.white.withAlphaComponent(0.7),
+            ]
+        )
+        caption.draw(at: NSPoint(x: bar.minX + 20, y: bar.minY + 6))
 
         for item in picker.items {
             let frame = NSRect(
@@ -160,7 +204,7 @@ final class OverlayView: NSView {
     private func rebuildAssistButtons() {
         assistButtons.forEach { $0.removeFromSuperview() }
         assistButtons.removeAll()
-        window?.ignoresMouseEvents = state.assistCandidates.isEmpty
+        window?.ignoresMouseEvents = state.assistCandidates.isEmpty && !state.clickable
 
         guard
             let assist = state.assistZone,

@@ -48,7 +48,7 @@ final class StatusWindowController {
     private var bodyText: String {
         let granted = AccessibilityPermission.isGranted
         let accessLine = granted
-            ? "Accessibility is granted. Drag a window to a screen edge, corner, or the top."
+            ? "Accessibility is granted. Drag to an edge, a corner, or the top layout bar. Hover the green button for the same layouts."
             : "Accessibility is not granted yet. Click the button below, enable DXL Window Manager, then drag a window to an edge."
         return "\(accessLine)\n\nLog: \(AppLog.fileURL.path)\nLook for the split-rectangle icon in the menu bar."
     }

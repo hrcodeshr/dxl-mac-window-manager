@@ -13,6 +13,11 @@ enum Settings {
         set { defaults.set(newValue, forKey: "snapAssistEnabled") }
     }
 
+    static var greenButtonPickerEnabled: Bool {
+        get { defaults.object(forKey: "greenButtonPickerEnabled") as? Bool ?? true }
+        set { defaults.set(newValue, forKey: "greenButtonPickerEnabled") }
+    }
+
     static var gap: Double {
         get {
             if defaults.object(forKey: "gap") == nil { return 8 }

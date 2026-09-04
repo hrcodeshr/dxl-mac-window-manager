@@ -44,6 +44,11 @@ enum DXLSnapCoreCheck {
                 == .layoutPicker
         )
         check(
+            "deeper top strip still opens layout picker",
+            SnapDetector.target(cursor: Point(x: 960, y: 50), screen: screen, policy: policy)
+                == .layoutPicker
+        )
+        check(
             "center does not snap",
             SnapDetector.target(cursor: Point(x: 960, y: 540), screen: screen, policy: policy)
                 == .none
@@ -135,6 +140,27 @@ enum DXLSnapCoreCheck {
                     frame: Rect(x: 0, y: 0, width: 960, height: 1080)
                 )
         )
+
+        let snappedLeft = LayoutCatalog.twoEqual.zones[0].frame(in: screen, gap: 8)
+        if let match = SnapDetector.matchingZone(frame: snappedLeft, screen: screen, gap: 8) {
+            check("matching zone finds left half", match.layout.id == LayoutCatalog.twoEqual.id && match.index == 0)
+        } else {
+            check("matching zone finds left half", false)
+        }
+
+        let custom = SnapLayout(
+            id: "custom-test",
+            name: "Custom test",
+            zones: [ZoneFractions(x: 0, y: 0, width: 0.25, height: 1), ZoneFractions(x: 0.25, y: 0, width: 0.75, height: 1)]
+        )
+        LayoutRegistry.shared.customLayouts = [custom]
+        check("registry exposes custom layout", LayoutCatalog.layout(id: "custom-test")?.name == "Custom test")
+        let customPicker = LayoutPickerGeometry.make(screen: screen)
+        check("picker includes custom layout", customPicker.items.contains { $0.layout.id == "custom-test" })
+        LayoutRegistry.shared.customLayouts = []
+
+        let fallback = RestoreMath.defaultFloating(on: screen)
+        check("default floating is smaller than the screen", fallback.width < screen.width && fallback.height < screen.height)
 
         if failures == 0 {
             print("All checks passed.")

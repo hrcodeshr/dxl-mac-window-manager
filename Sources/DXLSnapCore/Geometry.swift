@@ -54,7 +54,7 @@ public struct Rect: Equatable, Sendable {
     }
 }
 
-public struct ZoneFractions: Equatable, Sendable {
+public struct ZoneFractions: Equatable, Sendable, Codable {
     /// Unit rectangle inside a screen, origin top-left, values 0...1.
     public var x: Double
     public var y: Double
@@ -79,7 +79,7 @@ public struct ZoneFractions: Equatable, Sendable {
     }
 }
 
-public struct SnapLayout: Equatable, Sendable, Identifiable {
+public struct SnapLayout: Equatable, Sendable, Identifiable, Codable {
     public var id: String
     public var name: String
     public var zones: [ZoneFractions]
@@ -177,8 +177,7 @@ public enum LayoutCatalog {
         ]
     )
 
-    /// Layouts shown in the Windows 11-style top snap bar.
-    public static let pickerLayouts: [SnapLayout] = [
+    public static let builtInPicker: [SnapLayout] = [
         twoEqual,
         twoThirdsLeft,
         threeColumns,
@@ -187,8 +186,39 @@ public enum LayoutCatalog {
         topBottom,
     ]
 
+    public static var pickerLayouts: [SnapLayout] {
+        LayoutRegistry.shared.pickerLayouts
+    }
+
     public static func layout(id: String) -> SnapLayout? {
-        let all = pickerLayouts + [twoThirdsRight, stackedAndRight, maximize]
+        LayoutRegistry.shared.layout(id: id)
+    }
+
+    public static func builtIn(id: String) -> SnapLayout? {
+        let all = builtInPicker + [twoThirdsRight, stackedAndRight, maximize]
         return all.first { $0.id == id }
+    }
+}
+
+public final class LayoutRegistry: @unchecked Sendable {
+    public static let shared = LayoutRegistry()
+
+    public var customLayouts: [SnapLayout] = []
+
+    public init() {}
+
+    public var pickerLayouts: [SnapLayout] {
+        LayoutCatalog.builtInPicker + customLayouts
+    }
+
+    public func layout(id: String) -> SnapLayout? {
+        if let builtIn = LayoutCatalog.builtIn(id: id) {
+            return builtIn
+        }
+        return customLayouts.first { $0.id == id }
+    }
+
+    public var allLayouts: [SnapLayout] {
+        pickerLayouts + [LayoutCatalog.twoThirdsRight, LayoutCatalog.stackedAndRight, LayoutCatalog.maximize]
     }
 }

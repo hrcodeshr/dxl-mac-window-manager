@@ -37,6 +37,24 @@ struct AXWindow {
         return ok ? Point(x: Double(cgSize.width), y: Double(cgSize.height)) : nil
     }
 
+    var zoomButtonFrame: Rect? {
+        guard let button = copy(kAXZoomButtonAttribute) else { return nil }
+        let element = button as! AXUIElement
+        var posValue: AnyObject?
+        var sizeValue: AnyObject?
+        AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &posValue)
+        AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeValue)
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        guard
+            let posValue,
+            let sizeValue,
+            AXValueGetValue(posValue as! AXValue, .cgPoint, &origin),
+            AXValueGetValue(sizeValue as! AXValue, .cgSize, &size)
+        else { return nil }
+        return Rect(x: Double(origin.x), y: Double(origin.y), width: Double(size.width), height: Double(size.height))
+    }
+
     var isResizable: Bool {
         var settable: DarwinBoolean = false
         let result = AXUIElementIsAttributeSettable(element, kAXSizeAttribute as CFString, &settable)

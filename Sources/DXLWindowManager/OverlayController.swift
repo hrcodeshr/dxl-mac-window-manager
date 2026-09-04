@@ -9,9 +9,32 @@ final class OverlayController {
         overlay(for: screen).show(state: OverlayState(highlightedZone: zone))
     }
 
-    func showPicker(on screen: NSScreen, picker: LayoutPickerGeometry, hit: PickerHit?, zone: Rect?) {
+    func showPicker(
+        on screen: NSScreen,
+        picker: LayoutPickerGeometry,
+        hit: PickerHit?,
+        zone: Rect?,
+        clickable: Bool = false,
+        onSelect: ((PickerHit) -> Void)? = nil,
+        onCancel: (() -> Void)? = nil
+    ) {
         hide(except: screen)
-        overlay(for: screen).show(state: OverlayState(highlightedZone: zone, picker: picker, pickerHit: hit))
+        let overlay = overlay(for: screen)
+        if let view = overlay.contentView as? OverlayView {
+            view.onPickerSelect = onSelect
+            view.onPickerCancel = onCancel
+        }
+        overlay.show(
+            state: OverlayState(
+                highlightedZone: zone,
+                picker: picker,
+                pickerHit: hit,
+                clickable: clickable
+            )
+        )
+        if clickable {
+            overlay.makeKeyAndOrderFront(nil)
+        }
     }
 
     func showAssist(

@@ -57,6 +57,23 @@ final class MenuBarController {
         assist.state = Settings.snapAssistEnabled ? .on : .off
         menu.addItem(assist)
 
+        let green = NSMenuItem(
+            title: "Layout picker on green button",
+            action: #selector(toggleGreen),
+            keyEquivalent: ""
+        )
+        green.target = self
+        green.state = Settings.greenButtonPickerEnabled ? .on : .off
+        menu.addItem(green)
+
+        let layouts = NSMenuItem(
+            title: "Edit Custom Layouts…",
+            action: #selector(editLayouts),
+            keyEquivalent: ""
+        )
+        layouts.target = self
+        menu.addItem(layouts)
+
         menu.addItem(.separator())
 
         let login = NSMenuItem(
@@ -118,6 +135,15 @@ final class MenuBarController {
     @objc private func toggleAssist() {
         Settings.snapAssistEnabled.toggle()
         rebuildMenu()
+    }
+
+    @objc private func toggleGreen() {
+        Settings.greenButtonPickerEnabled.toggle()
+        rebuildMenu()
+    }
+
+    @objc private func editLayouts() {
+        appDelegate?.showLayoutEditor()
     }
 
     @objc private func toggleLogin() {

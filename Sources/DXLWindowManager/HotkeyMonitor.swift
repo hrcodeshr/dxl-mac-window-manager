@@ -62,8 +62,13 @@ final class HotkeyMonitor {
         let windowCenter = CoordinateSpace.topLeftPointToCocoa(Point(x: current.midX, y: current.midY))
         let screen = CoordinateSpace.screenContaining(cocoaPoint: windowCenter) ?? NSScreen.main
         guard let screen else { return false }
-        let visible = CoordinateSpace.visibleTopLeftRect(for: screen)
-        let frame = layout.zones[mapping.1].frame(in: visible, gap: Settings.gap)
-        return SnapApply.snap(window, to: frame, reason: "hotkey \(mapping.0)")
+        SnapRuntime.shared.apply(
+            layout: layout,
+            index: mapping.1,
+            window: window,
+            screen: screen,
+            reason: "hotkey \(mapping.0)"
+        )
+        return true
     }
 }
