@@ -125,7 +125,6 @@ final class MenuBarController {
     }
 
     @objc private func requestAccess() {
-        AccessibilityPermission.promptIfNeeded()
         AccessibilityPermission.openSystemSettings()
         appDelegate?.refreshAccess()
         rebuildMenu()

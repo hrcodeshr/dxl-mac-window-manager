@@ -40,7 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         greenButtonMonitor = GreenButtonMonitor()
         layoutEditor = LayoutEditorController()
         statusWindow = StatusWindowController()
-        statusWindow?.show()
+        if !AccessibilityPermission.isGranted {
+            statusWindow?.show()
+        }
         refreshAccess()
 
         accessTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
@@ -69,7 +71,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if lastTrusted != granted {
             lastTrusted = granted
             menuBar?.rebuildMenu()
+            statusWindow?.refresh()
+            if granted {
+                statusWindow?.hide()
+            }
         }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !AccessibilityPermission.isGranted {
+            statusWindow?.show()
+        }
+        return false
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 
     func showStatusWindow() {

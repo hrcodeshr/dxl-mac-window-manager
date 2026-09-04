@@ -1,14 +1,28 @@
 import AppKit
 
-final class StatusWindowController {
+final class StatusWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
+    private var bodyField: NSTextField?
+
+    var isVisible: Bool {
+        window?.isVisible == true
+    }
 
     func show() {
         if window == nil {
             window = makeWindow()
         }
+        refresh()
         window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func hide() {
+        window?.orderOut(nil)
+    }
+
+    func refresh() {
+        bodyField?.stringValue = bodyText
+        window?.title = "DXL Window Manager \(AppVersion.string)"
     }
 
     private func makeWindow() -> NSWindow {
@@ -20,6 +34,7 @@ final class StatusWindowController {
         )
         window.title = "DXL Window Manager \(AppVersion.string)"
         window.isReleasedWhenClosed = false
+        window.delegate = self
         window.center()
 
         let view = NSView(frame: window.contentView!.bounds)
@@ -31,16 +46,20 @@ final class StatusWindowController {
 
         let body = NSTextField(wrappingLabelWithString: bodyText)
         body.frame = NSRect(x: 24, y: 56, width: 392, height: 156)
+        bodyField = body
 
-        let access = NSButton(title: "Request Accessibility Access…", target: nil, action: nil)
+        let access = NSButton(title: "Open Accessibility Settings…", target: self, action: #selector(requestAccess))
         access.bezelStyle = .rounded
-        access.frame = NSRect(x: 24, y: 20, width: 240, height: 28)
-        access.target = self
-        access.action = #selector(requestAccess)
+        access.frame = NSRect(x: 24, y: 20, width: 220, height: 28)
+
+        let close = NSButton(title: "Close", target: self, action: #selector(closeWindow))
+        close.bezelStyle = .rounded
+        close.frame = NSRect(x: 252, y: 20, width: 80, height: 28)
 
         view.addSubview(title)
         view.addSubview(body)
         view.addSubview(access)
+        view.addSubview(close)
         window.contentView = view
         return window
     }
@@ -48,14 +67,22 @@ final class StatusWindowController {
     private var bodyText: String {
         let granted = AccessibilityPermission.isGranted
         let accessLine = granted
-            ? "Accessibility is granted. Drag to an edge, a corner, or the top layout bar. Hover the green button for the same layouts."
-            : "Accessibility is not granted yet. Click the button below, enable DXL Window Manager, then drag a window to an edge."
-        return "\(accessLine)\n\nThis window must say \(AppVersion.string). While you drag, the menu-bar icon should read Drag / Picker / Left.\n\nIf macOS still maximizes on top, turn off Desktop & Dock → Drag windows to screen edges to tile.\nLog: \(AppLog.fileURL.path)"
+            ? "Accessibility is granted. You can close this window. Drag to an edge, a corner, or the top for layouts."
+            : "Accessibility is not granted yet. Open Accessibility Settings, enable DXL Window Manager, then close this window."
+        return "\(accessLine)\n\nReopen anytime from the menu-bar icon → Show Status Window.\n\nIf macOS still maximizes on top, turn off Desktop & Dock → Drag windows to screen edges to tile.\nLog: \(AppLog.fileURL.path)"
     }
 
     @objc private func requestAccess() {
-        AccessibilityPermission.promptIfNeeded()
         AccessibilityPermission.openSystemSettings()
-        AppLog.info("status window requested Accessibility")
+        AppLog.info("status window opened Accessibility settings")
+    }
+
+    @objc private func closeWindow() {
+        hide()
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        hide()
+        return false
     }
 }
