@@ -4,6 +4,11 @@
 *.swp
 *~
 
+# Swift
+.build/
+.swiftpm/
+dist/
+
 # Xcode / Swift
 DerivedData/
 build/
