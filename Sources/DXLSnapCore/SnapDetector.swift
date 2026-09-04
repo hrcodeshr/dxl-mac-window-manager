@@ -48,25 +48,37 @@ public enum DragTarget: Equatable, Sendable {
 }
 
 public enum SnapDetector {
-    /// Resolves a cursor position in local top-left screen coordinates.
+    /// Resolves a cursor position in top-left coordinates.
+    /// `display` is the full monitor (including the menu bar). `visible` is the desktop
+    /// under the menu bar and dock. Dragging to the physical top hits the menu bar, so
+    /// the picker must use `display`, not only `visible`.
     public static func target(
         cursor: Point,
         screen: Rect,
         policy: SnapPolicy = .default
     ) -> DragTarget {
-        guard screen.contains(cursor) else { return .none }
+        target(cursor: cursor, display: screen, visible: screen, policy: policy)
+    }
 
-        let corner = min(policy.cornerSize, screen.width / 3, screen.height / 3)
+    public static func target(
+        cursor: Point,
+        display: Rect,
+        visible: Rect,
+        policy: SnapPolicy = .default
+    ) -> DragTarget {
+        guard display.contains(cursor) || visible.contains(cursor) else { return .none }
+
+        let corner = min(policy.cornerSize, display.width / 3, display.height / 3)
         let edge = policy.edgeThickness
-        let inLeft = cursor.x <= screen.minX + edge
-        let inRight = cursor.x >= screen.maxX - edge
-        let inTop = cursor.y <= screen.minY + edge
-        let inBottom = cursor.y >= screen.maxY - edge
+        let inLeft = cursor.x <= display.minX + edge
+        let inRight = cursor.x >= display.maxX - edge
+        let inTop = cursor.y <= display.minY + edge
+        let inBottom = cursor.y >= display.maxY - edge
         let tightCorner = min(40.0, corner)
-        let inTightLeft = cursor.x <= screen.minX + tightCorner
-        let inTightRight = cursor.x >= screen.maxX - tightCorner
-        let inTightTop = cursor.y <= screen.minY + tightCorner
-        let inTightBottom = cursor.y >= screen.maxY - tightCorner
+        let inTightLeft = cursor.x <= display.minX + tightCorner
+        let inTightRight = cursor.x >= display.maxX - tightCorner
+        let inTightTop = cursor.y <= display.minY + tightCorner
+        let inTightBottom = cursor.y >= display.maxY - tightCorner
 
         if inTightLeft && inTightTop {
             return .zone(layoutID: LayoutCatalog.quadrants.id, zoneIndex: 0)
@@ -81,7 +93,8 @@ public enum SnapDetector {
             return .zone(layoutID: LayoutCatalog.quadrants.id, zoneIndex: 3)
         }
 
-        if cursor.y <= screen.minY + policy.topPickerThickness {
+        let pickerBottom = visible.minY + policy.topPickerThickness
+        if cursor.y >= display.minY && cursor.y <= pickerBottom {
             return .layoutPicker
         }
 
@@ -186,13 +199,22 @@ public struct LayoutPickerGeometry: Equatable, Sendable {
         return LayoutPickerGeometry(bar: bar, items: items)
     }
 
-    public func hitTest(_ cursor: Point) -> PickerHit? {
+    public func hitTest(_ cursor: Point, columnFallback: Bool = false) -> PickerHit? {
         for item in items {
             for (index, zone) in item.zoneFrames.enumerated() where zone.contains(cursor) {
                 return PickerHit(layoutID: item.layout.id, zoneIndex: index)
             }
             if item.frame.contains(cursor), let first = item.zoneFrames.indices.first {
                 return PickerHit(layoutID: item.layout.id, zoneIndex: first)
+            }
+        }
+        if columnFallback {
+            for item in items where cursor.x >= item.frame.minX && cursor.x <= item.frame.maxX {
+                if let nearest = item.zoneFrames.enumerated().min(by: {
+                    abs($0.element.midX - cursor.x) < abs($1.element.midX - cursor.x)
+                }) {
+                    return PickerHit(layoutID: item.layout.id, zoneIndex: nearest.offset)
+                }
             }
         }
         return nil

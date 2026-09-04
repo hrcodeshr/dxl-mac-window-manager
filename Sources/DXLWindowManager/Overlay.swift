@@ -81,6 +81,8 @@ final class OverlayView: NSView {
         }
 
         if let picker = state.picker {
+            NSColor.black.withAlphaComponent(0.18).setFill()
+            bounds.fill()
             drawPicker(picker, origin: origin)
         }
 

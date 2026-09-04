@@ -4,6 +4,7 @@ import DXLSnapCore
 final class DragSnapMonitor {
     private var monitors: [Any] = []
     private var drag: DragSession?
+    private var lastLoggedTarget: DragTarget?
 
     private struct DragSession {
         var window: AXWindow
@@ -121,10 +122,7 @@ final class DragSnapMonitor {
             let originMoved =
                 abs(current.x - session.initialFrame.x) > 4
                 || abs(current.y - session.initialFrame.y) > 4
-            let sameSize =
-                abs(current.width - session.initialFrame.width) < 2
-                && abs(current.height - session.initialFrame.height) < 2
-            guard sameSize && (originMoved || mouseDelta > 8) else { return }
+            guard originMoved || mouseDelta > 8 else { return }
             session.moved = true
             drag = session
         }
@@ -159,10 +157,15 @@ final class DragSnapMonitor {
 
     private func presentTarget() {
         guard let screen = CoordinateSpace.screenContaining(cocoaPoint: NSEvent.mouseLocation) else { return }
+        let display = CoordinateSpace.displayTopLeftRect(for: screen)
         let visible = CoordinateSpace.visibleTopLeftRect(for: screen)
         let cursor = CoordinateSpace.cocoaPointToTopLeft(NSEvent.mouseLocation)
-        let target = SnapDetector.target(cursor: cursor, screen: visible)
+        let target = SnapDetector.target(cursor: cursor, display: display, visible: visible)
         let overlay = SnapRuntime.shared.overlay
+        if lastLoggedTarget != target {
+            lastLoggedTarget = target
+            AppLog.info("drag target=\(target) cursor=\(Int(cursor.x)),\(Int(cursor.y))")
+        }
 
         switch target {
         case .none:
@@ -172,7 +175,7 @@ final class DragSnapMonitor {
             overlay.showHighlight(on: screen, zone: zone)
         case .layoutPicker:
             let picker = LayoutPickerGeometry.make(screen: visible)
-            let hit = picker.hitTest(cursor)
+            let hit = picker.hitTest(cursor, columnFallback: true)
             let zone: Rect?
             if let hit, let layout = LayoutCatalog.layout(id: hit.layoutID) {
                 zone = layout.zones[hit.zoneIndex].frame(in: visible, gap: Settings.gap)
@@ -189,9 +192,10 @@ final class DragSnapMonitor {
 
     private func resolveTarget() -> (layout: SnapLayout, index: Int, screen: NSScreen)? {
         guard let screen = CoordinateSpace.screenContaining(cocoaPoint: NSEvent.mouseLocation) else { return nil }
+        let display = CoordinateSpace.displayTopLeftRect(for: screen)
         let visible = CoordinateSpace.visibleTopLeftRect(for: screen)
         let cursor = CoordinateSpace.cocoaPointToTopLeft(NSEvent.mouseLocation)
-        let target = SnapDetector.target(cursor: cursor, screen: visible)
+        let target = SnapDetector.target(cursor: cursor, display: display, visible: visible)
 
         switch target {
         case .none:
@@ -200,7 +204,7 @@ final class DragSnapMonitor {
             return (LayoutCatalog.maximize, 0, screen)
         case .layoutPicker:
             let picker = LayoutPickerGeometry.make(screen: visible)
-            if let hit = picker.hitTest(cursor), let layout = LayoutCatalog.layout(id: hit.layoutID) {
+            if let hit = picker.hitTest(cursor, columnFallback: true), let layout = LayoutCatalog.layout(id: hit.layoutID) {
                 return (layout, hit.zoneIndex, screen)
             }
             return (LayoutCatalog.maximize, 0, screen)

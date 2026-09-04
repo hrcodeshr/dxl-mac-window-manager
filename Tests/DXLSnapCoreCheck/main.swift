@@ -48,6 +48,17 @@ enum DXLSnapCoreCheck {
             SnapDetector.target(cursor: Point(x: 960, y: 50), screen: screen, policy: policy)
                 == .layoutPicker
         )
+        let display = Rect(x: 0, y: 0, width: 1920, height: 1080)
+        let visible = Rect(x: 0, y: 25, width: 1920, height: 1055)
+        check(
+            "menu-bar strip still opens layout picker",
+            SnapDetector.target(
+                cursor: Point(x: 960, y: 8),
+                display: display,
+                visible: visible,
+                policy: policy
+            ) == .layoutPicker
+        )
         check(
             "center does not snap",
             SnapDetector.target(cursor: Point(x: 960, y: 540), screen: screen, policy: policy)

@@ -40,7 +40,7 @@ final class GreenButtonMonitor {
         }
 
         let mouse = NSEvent.mouseLocation
-        guard let window = WindowEngine.windowAtCocoaPoint(mouse), let button = window.zoomButtonFrame else {
+        guard let window = WindowEngine.windowAtCocoaPoint(mouse) else {
             if visible {
                 let cursor = CoordinateSpace.cocoaPointToTopLeft(mouse)
                 if let screen = CoordinateSpace.screenContaining(cocoaPoint: mouse) {
@@ -57,7 +57,13 @@ final class GreenButtonMonitor {
             return
         }
 
-        let slop = button.inset(by: -10)
+        let button = window.zoomButtonFrame ?? trafficLightFallback(for: window)
+        guard let button else {
+            if visible { hide() }
+            return
+        }
+
+        let slop = button.inset(by: -14)
         let cursor = CoordinateSpace.cocoaPointToTopLeft(mouse)
         let overButton = slop.contains(cursor)
         guard overButton || visible else { return }
@@ -71,7 +77,7 @@ final class GreenButtonMonitor {
             return
         }
 
-        let hit = picker.hitTest(cursor)
+        let hit = picker.hitTest(cursor, columnFallback: true)
         let zone: Rect?
         if let hit, let layout = LayoutCatalog.layout(id: hit.layoutID) {
             zone = layout.zones[hit.zoneIndex].frame(in: visibleFrame, gap: Settings.gap)
@@ -108,6 +114,11 @@ final class GreenButtonMonitor {
         )
         visible = false
         hoveredWindow = nil
+    }
+
+    private func trafficLightFallback(for window: AXWindow) -> Rect? {
+        guard let frame = window.frame else { return nil }
+        return Rect(x: frame.x + 8, y: frame.y + 4, width: 72, height: 28)
     }
 
     private func hide() {

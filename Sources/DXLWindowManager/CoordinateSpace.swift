@@ -41,4 +41,8 @@ enum CoordinateSpace {
     static func visibleTopLeftRect(for screen: NSScreen) -> Rect {
         cocoaRectToTopLeft(screen.visibleFrame)
     }
+
+    static func displayTopLeftRect(for screen: NSScreen) -> Rect {
+        cocoaRectToTopLeft(screen.frame)
+    }
 }
